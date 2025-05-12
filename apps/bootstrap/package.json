@@ -22,7 +22,7 @@
 	},
 	"homepage": "https://github.com/visionsofparadise/dice#readme",
 	"dependencies": {
-		"@dice/socket": "*",
+		"@xkore/dice": "*",
 		"@scure/base": "^1.2.4",
 		"loglevel": "^1.9.2"
 	},

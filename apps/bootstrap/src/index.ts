@@ -1,5 +1,5 @@
-import { IpType, Keys, NatType, Socket } from "@dice/socket";
 import { base58, hex } from "@scure/base";
+import { IpType, Keys, NatType, Socket } from "@xkore/dice";
 import "dotenv/config";
 import log, { LogLevelNumbers } from "loglevel";
 import { getGeneration } from "./getGeneration";

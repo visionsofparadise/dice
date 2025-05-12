@@ -1,5 +1,5 @@
 {
-	"name": "@dice/socket",
+	"name": "@xkore/dice",
 	"version": "0.0.0",
 	"description": "Distributed Interactive Connectivity Establishment",
 	"main": "./dist/index.js",
