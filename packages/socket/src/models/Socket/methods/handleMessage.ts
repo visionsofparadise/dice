@@ -1,67 +1,91 @@
 import { Socket } from "..";
-import { Address } from "../../Address";
+import { Keys } from "../../Keys";
 import { Message } from "../../Message";
-import { NatType } from "../../Node/Constant";
 
 export const handleSocketMessage = async (socket: Socket, message: Message, context: Socket.MessageContext) => {
 	try {
-		// socket.logger?.debug(
-		// 	`MESSAGE RECEIVED\nid: ${hex.encode(message.messageId)}${"transactionId" in message.body ? `\ntid: ${hex.encode(message.body.transactionId)}` : ""}\ntype: ${message.body.type}\nfrom: ${base58.encode(message.sourceNode.publicKey)}\nto: ${base58.encode(message.targetNode.publicKey)}\nremote: ${remoteAddress.toString()}`
-		// );
+		socket.logger?.debug(`Handling message ${message.body.type} from ${context.remote.networkAddress.toString()}`);
 
-		if (message.targetNode.address.toString() === socket.node.address.toString()) {
-			let response: [Message<"response">, Address | undefined] | undefined;
+		if (!Keys.isVerified(message.signature, message.hash, message.node.publicKey)) return;
 
-			switch (message.body.type) {
-				case "ping": {
-					response = socket.handlePing(message as Message<"ping">);
+		socket.logger?.debug(`Verified message ${message.body.type} from ${context.remote.networkAddress.toString()}`);
 
-					break;
-				}
-				case "reflect": {
-					response = socket.handleReflect(message as Message<"reflect">, context.remoteInfo);
+		socket.handleMessageNodes(message);
 
-					break;
-				}
-				case "punch": {
-					response = socket.handlePunch(message as Message<"punch">);
+		socket.logger?.debug(`Handled nodes from message ${message.body.type} from ${context.remote.networkAddress.toString()}`);
 
-					break;
-				}
-				case "listNodes": {
-					response = socket.handleListNodes(message as Message<"listNodes">);
-
-					break;
-				}
-				case "putData": {
-					socket.emit("data", message.body.data, { ...context, message });
-
-					break;
-				}
+		switch (message.body.type) {
+			case "noop": {
+				break;
 			}
+			case "ping": {
+				await socket.handlePing(message as Message<"ping">);
 
-			if (response) await socket.send(...response);
-		} else {
-			socket.logger?.debug(`Forwarding to ${message.targetNode.address.toString()}`);
+				break;
+			}
+			case "reflect": {
+				await socket.handleReflect(message as Message<"reflect">, context);
 
-			await socket.send(message);
-			await socket.processNode(message.targetNode);
+				break;
+			}
+			case "reflectResponse": {
+				await socket.handleResponse(message as Message<"reflectResponse">, context);
+
+				break;
+			}
+			case "punch": {
+				await socket.handlePunch(message as Message<"punch">, context);
+
+				break;
+			}
+			case "reveal": {
+				await socket.handleReveal(message as Message<"reveal">, context);
+
+				break;
+			}
+			case "revealResponse": {
+				await socket.handleResponse(message as Message<"revealResponse">, context);
+
+				break;
+			}
+			case "listNodes": {
+				await socket.handleListNodes(message as Message<"listNodes">);
+
+				break;
+			}
+			case "listNodesResponse": {
+				await socket.handleResponse(message as Message<"listNodesResponse">, context);
+
+				break;
+			}
+			case "putData": {
+				socket.emit("data", message.body.data, { ...context, message });
+
+				break;
+			}
+			case "relay": {
+				await socket.handleRelay(message as Message<"relay">);
+
+				break;
+			}
+			case "successResponse": {
+				await socket.handleResponse(message as Message<"successResponse">, context);
+
+				break;
+			}
+			case "badRequestErrorResponse": {
+				await socket.handleResponse(message as Message<"badRequestErrorResponse">, context);
+
+				break;
+			}
+			case "internalErrorResponse": {
+				await socket.handleResponse(message as Message<"internalErrorResponse">, context);
+
+				break;
+			}
 		}
 
-		await socket.processNode(message.sourceNode);
-
-		const remoteAddress = Address.fromRemoteInfo(context.remoteInfo);
-		const cacheKey = socket.createCacheKey(remoteAddress);
-
-		socket.cache.contact.set(cacheKey);
-
-		if (socket.overlay.addressSet.has(remoteAddress.toString())) {
-			socket.cache.health.set(cacheKey);
-		}
-
-		if (socket.node.natType !== NatType.NAT4) {
-			socket.cache.punch.set(cacheKey);
-		}
+		socket.logger?.debug(`Handled message ${message.body.type} from ${context.remote.networkAddress.toString()}`);
 	} catch (error) {
 		socket.emit("error", error);
 	}

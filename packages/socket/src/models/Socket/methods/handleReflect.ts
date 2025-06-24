@@ -1,22 +1,24 @@
-import { RemoteInfo } from "dgram";
 import { Socket } from "..";
-import { Address } from "../../Address";
+import { Nat1Endpoint } from "../../Endpoint/Nat1";
 import { Message } from "../../Message";
-import { ResponseCode } from "../../Message/ResponseCode";
+import { Target } from "../../Target/Codec";
 
-export const handleSocketReflect = (socket: Socket, request: Message<"reflect">, remoteInfo: RemoteInfo): [Message<"response">, Address] => {
-	const address = Address.fromRemoteInfo(remoteInfo);
-
-	const message = new Message({
-		sourceNode: socket.node,
-		targetNode: request.sourceNode,
-		body: {
-			type: "response",
-			code: ResponseCode.SUCCESS,
-			transactionId: request.body.transactionId,
-			body: address.buffer,
+export const handleSocketReflect = async (socket: Socket, request: Message<"reflect">, context: Socket.MessageContext): Promise<void> => {
+	const response = Message.create(
+		{
+			node: socket.node,
+			body: {
+				type: "reflectResponse",
+				transactionId: request.body.transactionId,
+				networkAddress: context.remote.networkAddress,
+			},
 		},
-	});
+		socket.keys
+	);
 
-	return [message, address];
+	const target: Target<Nat1Endpoint> = {
+		endpoint: new Nat1Endpoint(context.remote),
+	};
+
+	await socket.send(context.local, target, response);
 };

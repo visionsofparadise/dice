@@ -1,30 +1,28 @@
 import { shuffle } from "@technically/lodash";
 import { getBitwiseDistance } from "kademlia-table";
 import { Socket } from "..";
-import { PublicKeyCodec } from "../../Keys/Codec";
-import { Node } from "../../Node/Codec";
+import { Keys } from "../../Keys";
+import { Node } from "../../Node";
 
-export const findSocketNodes = async (socket: Socket, publicKey: Uint8Array): Promise<Array<Node>> => {
-	const byteLength = PublicKeyCodec.byteLength();
-	const initialNodes = socket.overlay.table.listClosestToId(publicKey, socket.options.concurrency);
+export const findSocketNodes = async (socket: Socket, diceAddress: Uint8Array): Promise<Array<Node>> => {
+	const nDiceAddress = Keys.normalizeAddress(diceAddress);
+
+	let initialNodes = socket.overlay.table
+		.listClosestToId(nDiceAddress)
+		.sort((nodeA, nodeB) => getBitwiseDistance(nodeA.diceAddress, nDiceAddress) - getBitwiseDistance(nodeB.diceAddress, nDiceAddress))
+		.slice(0, socket.options.concurrency);
 
 	if (initialNodes.length < socket.options.concurrency) {
 		const bootstrapNodes = shuffle(socket.options.bootstrapNodes);
 
-		while (initialNodes.length < socket.options.concurrency) {
-			const node = bootstrapNodes.pop();
-
-			if (!node) break;
-
-			initialNodes.push(node);
-		}
+		initialNodes = initialNodes.concat(bootstrapNodes.slice(0, socket.options.concurrency - initialNodes.length));
 	}
 
 	const results = await Promise.allSettled(
 		initialNodes.map(async (initialNode) => {
 			let nodes: Array<Node> = [initialNode];
 
-			for await (const nextNodes of socket.iterateNodes(publicKey, initialNode)) nodes = nextNodes;
+			for await (const nextNodes of socket.iterateNodes(nDiceAddress, initialNode)) nodes = nextNodes;
 
 			return nodes;
 		})
@@ -36,6 +34,6 @@ export const findSocketNodes = async (socket: Socket, publicKey: Uint8Array): Pr
 
 			return previous.concat(result.value);
 		}, [])
-		.sort((nodeA, nodeB) => getBitwiseDistance(nodeA.publicKey, publicKey, byteLength) - getBitwiseDistance(nodeB.publicKey, publicKey, byteLength))
+		.sort((nodeA, nodeB) => getBitwiseDistance(nodeA.diceAddress, nDiceAddress) - getBitwiseDistance(nodeB.diceAddress, nDiceAddress))
 		.slice(0, 20);
 };

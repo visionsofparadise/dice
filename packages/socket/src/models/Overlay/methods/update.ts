@@ -1,7 +1,7 @@
-import { base58 } from "@scure/base";
+import { base32crockford } from "@scure/base";
 import { Overlay } from "..";
 import { isSequencedAfter } from "../../../utilities/Sequenced";
-import { Node } from "../../Node/Codec";
+import { Node } from "../../Node";
 
 export const updateOverlayNode = (overlay: Overlay, nextNode: Node): boolean => {
 	const id = overlay.table.getId(nextNode);
@@ -13,10 +13,15 @@ export const updateOverlayNode = (overlay: Overlay, nextNode: Node): boolean => 
 	const result = overlay.table.update(nextNode);
 
 	if (result) {
-		overlay.addressSet.delete(previousNode.address.toString());
-		overlay.addressSet.add(nextNode.address.toString());
+		for (const endpoint of previousNode.endpoints) {
+			if ("networkAddress" in endpoint) overlay.networkAddressSet.delete(endpoint.networkAddress.toString());
+		}
 
-		overlay.logger?.debug(`Updated node ${base58.encode(id)}`);
+		for (const endpoint of nextNode.endpoints) {
+			if ("networkAddress" in endpoint) overlay.networkAddressSet.add(endpoint.networkAddress.toString());
+		}
+
+		overlay.logger?.debug(`Updated node ${base32crockford.encode(id)}`);
 
 		overlay.emit("update", previousNode, nextNode);
 	}

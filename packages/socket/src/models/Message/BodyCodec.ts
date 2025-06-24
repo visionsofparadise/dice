@@ -1,7 +1,11 @@
 import { Codec } from "bufferfy";
 import { IdCodec } from "../../utilities/Id";
-import { PublicKeyCodec } from "../Keys/Codec";
-import { ResponseCode } from "./ResponseCode";
+import { EndpointCodec } from "../Endpoint/Codec";
+import { Nat1EndpointCodec } from "../Endpoint/Nat1/Codec";
+import { Nat3EndpointCodec } from "../Endpoint/Nat3/Codec";
+import { DiceAddressCodec, SignatureCodec } from "../Keys/Codec";
+import { NetworkAddressCodec } from "../NetworkAddress/Codec";
+import { NodeCodec } from "../Node/Codec";
 
 export const NoopBodyCodec = Codec.Object({
 	type: Codec.Constant("noop"),
@@ -23,20 +27,56 @@ export const ReflectBodyCodec = Codec.Object({
 
 export interface ReflectBody extends Codec.Type<typeof ReflectBodyCodec> {}
 
+export const ReflectResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("reflectResponse"),
+	transactionId: IdCodec,
+	networkAddress: NetworkAddressCodec,
+});
+
+export interface ReflectResponseBody extends Codec.Type<typeof ReflectResponseBodyCodec> {}
+
 export const PunchBodyCodec = Codec.Object({
 	type: Codec.Constant("punch"),
 	transactionId: IdCodec,
+	endpoint: Codec.Union([Nat1EndpointCodec, Nat3EndpointCodec], Codec.UInt(8)),
 });
 
 export interface PunchBody extends Codec.Type<typeof PunchBodyCodec> {}
 
+export const RevealBodyCodec = Codec.Object({
+	type: Codec.Constant("reveal"),
+	transactionId: IdCodec,
+	target: Codec.Object({
+		diceAddress: DiceAddressCodec,
+		endpoint: Nat1EndpointCodec,
+	}),
+});
+
+export interface RevealBody extends Codec.Type<typeof RevealBodyCodec> {}
+
+export const RevealResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("revealResponse"),
+	transactionId: IdCodec,
+	networkAddress: NetworkAddressCodec,
+});
+
+export interface RevealResponseBody extends Codec.Type<typeof RevealResponseBodyCodec> {}
+
 export const ListNodesBodyCodec = Codec.Object({
 	type: Codec.Constant("listNodes"),
 	transactionId: IdCodec,
-	publicKey: PublicKeyCodec,
+	diceAddress: DiceAddressCodec,
 });
 
 export interface ListNodesBody extends Codec.Type<typeof ListNodesBodyCodec> {}
+
+export const ListNodesResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("listNodesResponse"),
+	transactionId: IdCodec,
+	nodes: Codec.Array(NodeCodec, Codec.UInt(8)),
+});
+
+export interface ListNodesResponseBody extends Codec.Type<typeof ListNodesResponseBodyCodec> {}
 
 export const PutDataBodyCodec = Codec.Object({
 	type: Codec.Constant("putData"),
@@ -45,93 +85,62 @@ export const PutDataBodyCodec = Codec.Object({
 
 export interface PutDataBody extends Codec.Type<typeof PutDataBodyCodec> {}
 
-export const ResponseSuccessBodyCodec = Codec.Object({
-	type: Codec.Constant("response"),
+export const SuccessResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("successResponse"),
 	transactionId: IdCodec,
-	code: Codec.Constant(ResponseCode.SUCCESS),
-	body: Codec.Bytes(Codec.VarInt(60)),
 });
 
-export interface ResponseSuccessBody extends Codec.Type<typeof ResponseSuccessBodyCodec> {}
+export interface SuccessResponseBody extends Codec.Type<typeof SuccessResponseBodyCodec> {}
 
-export const ResponseSuccessNoContentBodyCodec = Codec.Object({
-	type: Codec.Constant("response"),
+export const BadRequestErrorResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("badRequestErrorResponse"),
 	transactionId: IdCodec,
-	code: Codec.Constant(ResponseCode.SUCCESS_NO_CONTENT),
 });
 
-export interface ResponseSuccessNoContentBody extends Codec.Type<typeof ResponseSuccessNoContentBodyCodec> {}
+export interface BadRequestErrorResponseBody extends Codec.Type<typeof BadRequestErrorResponseBodyCodec> {}
 
-export const ResponseBadRequestBodyCodec = Codec.Object({
-	type: Codec.Constant("response"),
+export const InternalErrorResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("internalErrorResponse"),
 	transactionId: IdCodec,
-	code: Codec.Constant(ResponseCode.BAD_REQUEST),
-	message: Codec.Optional(Codec.String("utf8", Codec.UInt(8))),
 });
 
-export interface ResponseBadRequestBody extends Codec.Type<typeof ResponseBadRequestBodyCodec> {}
+export interface InternalErrorResponseBody extends Codec.Type<typeof InternalErrorResponseBodyCodec> {}
 
-export const ResponseUnauthorizedBodyCodec = Codec.Object({
-	type: Codec.Constant("response"),
-	transactionId: IdCodec,
-	code: Codec.Constant(ResponseCode.UNAUTHORIZED),
-	message: Codec.Optional(Codec.String("utf8", Codec.UInt(8))),
-});
-
-export interface ResponseUnauthorizedBody extends Codec.Type<typeof ResponseUnauthorizedBodyCodec> {}
-
-export const ResponseNotFoundBodyCodec = Codec.Object({
-	type: Codec.Constant("response"),
-	transactionId: IdCodec,
-	code: Codec.Constant(ResponseCode.NOT_FOUND),
-	message: Codec.Optional(Codec.String("utf8", Codec.UInt(8))),
-});
-
-export interface ResponseNotFoundBody extends Codec.Type<typeof ResponseNotFoundBodyCodec> {}
-
-export const ResponseTimeoutBodyCodec = Codec.Object({
-	type: Codec.Constant("response"),
-	transactionId: IdCodec,
-	code: Codec.Constant(ResponseCode.TIMEOUT),
-	message: Codec.Optional(Codec.String("utf8", Codec.UInt(8))),
-});
-
-export interface ResponseTimeoutBody extends Codec.Type<typeof ResponseTimeoutBodyCodec> {}
-
-export const ResponseRateLimitedBodyCodec = Codec.Object({
-	type: Codec.Constant("response"),
-	transactionId: IdCodec,
-	code: Codec.Constant(ResponseCode.RATE_LIMITED),
-	message: Codec.Optional(Codec.String("utf8", Codec.UInt(8))),
-});
-
-export interface ResponseRateLimitedBody extends Codec.Type<typeof ResponseRateLimitedBodyCodec> {}
-
-export const ResponseInternalBodyCodec = Codec.Object({
-	type: Codec.Constant("response"),
-	transactionId: IdCodec,
-	code: Codec.Constant(ResponseCode.INTERNAL),
-	message: Codec.Optional(Codec.String("utf8", Codec.UInt(8))),
-});
-
-export interface ResponseInternalBody extends Codec.Type<typeof ResponseInternalBodyCodec> {}
-
-export const MessageBodyCodec = Codec.Union([
+export const RelayableBodyCodec = Codec.Union([
 	NoopBodyCodec,
 	PingBodyCodec,
-	ReflectBodyCodec,
 	PunchBodyCodec,
+	RevealBodyCodec,
+	RevealResponseBodyCodec,
 	ListNodesBodyCodec,
+	ListNodesResponseBodyCodec,
 	PutDataBodyCodec,
-	ResponseSuccessBodyCodec,
-	ResponseSuccessNoContentBodyCodec,
-	ResponseBadRequestBodyCodec,
-	ResponseUnauthorizedBodyCodec,
-	ResponseNotFoundBodyCodec,
-	ResponseTimeoutBodyCodec,
-	ResponseRateLimitedBodyCodec,
-	ResponseInternalBodyCodec,
+	SuccessResponseBodyCodec,
+	BadRequestErrorResponseBodyCodec,
+	InternalErrorResponseBodyCodec,
 ]);
+
+export type RelayableBody = Codec.Type<typeof RelayableBodyCodec>;
+
+export type RelayableBodyMap = {
+	[T in RelayableBody["type"]]: Extract<RelayableBody, { type: T }>;
+};
+
+export type RelayableBodyType = keyof RelayableBodyMap;
+
+export const RelayBodyCodec = Codec.Object({
+	type: Codec.Constant("relay"),
+	target: Codec.Object({
+		diceAddress: DiceAddressCodec,
+		endpoint: EndpointCodec,
+	}),
+	body: RelayableBodyCodec,
+	signature: SignatureCodec,
+});
+
+export interface RelayBody extends Codec.Type<typeof RelayBodyCodec> {}
+
+export const MessageBodyCodec = Codec.Union([ReflectBodyCodec, ReflectResponseBodyCodec, ...RelayableBodyCodec.codecs, RelayBodyCodec]);
 
 export type MessageBody = Codec.Type<typeof MessageBodyCodec>;
 

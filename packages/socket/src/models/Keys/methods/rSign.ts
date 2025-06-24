@@ -4,10 +4,10 @@ import { RSignature } from "../Codec";
 
 export const rSignKeys = (keys: Keys, message: Uint8Array): RSignature => {
 	const signature = secp256k1.sign(message, keys.privateKey, { prehash: false });
-	const r = signature.recovery;
+	const recoveryBit = signature.recovery;
 
 	return {
+		recoveryBit,
 		signature: signature.toCompactRawBytes(),
-		r,
 	};
 };

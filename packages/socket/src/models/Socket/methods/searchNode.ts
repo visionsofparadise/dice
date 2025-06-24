@@ -1,40 +1,16 @@
-import { base58 } from "@scure/base";
 import { shuffle } from "@technically/lodash";
+import { getBitwiseDistance } from "kademlia-table";
 import { Socket } from "..";
-import { PublicKeyCodec } from "../../Keys/Codec";
-import { Node } from "../../Node/Codec";
+import { DiceAddressCodec } from "../../Keys/Codec";
+import { Node } from "../../Node";
 
-export const searchSocketNodes = async (socket: Socket, count: number, filter: (node: Node) => boolean, isAddingNodes = true): Promise<Array<Node>> => {
-	const resultPublicKeys: Set<string> = new Set();
-	const resultNodes: Array<Node> = [];
+export const searchSocketNode = async (socket: Socket, filter?: (node: Node) => boolean): Promise<Node | undefined> => {
+	const randomDiceAddress = crypto.getRandomValues(new Uint8Array(DiceAddressCodec.byteLength()));
 
-	for (const node of socket.overlay.table) {
-		if (filter(node) && resultNodes.length < count) {
-			const key = base58.encode(node.publicKey);
-
-			if (!resultPublicKeys.has(key)) {
-				resultPublicKeys.add(key);
-				resultNodes.push(node);
-			}
-		}
-
-		if (resultNodes.length >= count) return resultNodes;
-	}
-
-	for (const node of socket.options.bootstrapNodes) {
-		if (filter(node) && resultNodes.length < count) {
-			const key = base58.encode(node.publicKey);
-
-			if (!resultPublicKeys.has(key)) {
-				resultPublicKeys.add(key);
-				resultNodes.push(node);
-			}
-		}
-
-		if (resultNodes.length >= count) return resultNodes;
-	}
-
-	const initialNodes = socket.overlay.sample(socket.options.concurrency, () => true);
+	const initialNodes = socket.overlay.table
+		.listClosestToId(randomDiceAddress)
+		.sort((nodeA, nodeB) => getBitwiseDistance(nodeA.diceAddress, randomDiceAddress) - getBitwiseDistance(nodeB.diceAddress, randomDiceAddress))
+		.slice(0, socket.options.concurrency);
 
 	if (initialNodes.length < socket.options.concurrency) {
 		const bootstrapNodes = shuffle(socket.options.bootstrapNodes);
@@ -48,28 +24,23 @@ export const searchSocketNodes = async (socket: Socket, count: number, filter: (
 		}
 	}
 
-	await Promise.any(
-		initialNodes.map(async (initialNode) => {
-			const randomPublicKey = crypto.getRandomValues(new Uint8Array(PublicKeyCodec.byteLength()));
+	let isResolved = false;
 
-			for await (const nodes of socket.iterateNodes(randomPublicKey, initialNode, isAddingNodes)) {
-				for (const node of nodes) {
-					if (filter(node) && resultNodes.length < count) {
-						const key = base58.encode(initialNode.publicKey);
+	try {
+		const node = await Promise.any(
+			initialNodes.map(async (initialNode) => {
+				for await (const nodes of socket.iterateNodes(randomDiceAddress, initialNode)) {
+					if (isResolved) break;
 
-						if (!resultPublicKeys.has(key)) {
-							resultPublicKeys.add(key);
-							resultNodes.push(node);
-						}
-					}
-
-					if (resultNodes.length >= count) break;
+					for (const node of nodes) if (!filter || filter(node)) return node;
 				}
 
-				if (resultNodes.length >= count) break;
-			}
-		})
-	);
+				throw new Error("Node not found");
+			})
+		);
 
-	return resultNodes;
+		return node;
+	} catch (error) {
+		return undefined;
+	}
 };

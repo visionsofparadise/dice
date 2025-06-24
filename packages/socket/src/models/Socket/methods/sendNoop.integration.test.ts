@@ -1,40 +1,24 @@
-import { spawnIntegrationBootstrapSockets } from "../../../utilities/spawnIntegrationBootstrapNodes";
-import { INTEGRATION_TEST_TIMEOUT_MS, spawnIntegrationSocket } from "../../../utilities/spawnIntegrationSocket";
-import { Nat1Node } from "../../Node/Nat1";
+import { INTEGRATION_TEST_TIMEOUT_MS, spawnIntegrationSocketPair } from "../../../utilities/spawnIntegrationSocket";
+import { Nat1Endpoint } from "../../Endpoint/Nat1";
 
 it(
 	"sends noop",
 	async () => {
-		const bootstrapSockets = await spawnIntegrationBootstrapSockets();
-		const bootstrapNodes = bootstrapSockets.map((socket) => socket.node as Nat1Node);
+		await spawnIntegrationSocketPair(async (socketA, socketB) => {
+			const udpSocket = socketA.udpSockets[0]!;
 
-		const socketA = spawnIntegrationSocket({ bootstrapNodes, port: 4000 });
-		const socketB = spawnIntegrationSocket({ bootstrapNodes, port: 4001 });
-
-		try {
-			socketA.open();
-			socketB.open();
-
-			await socketA.bootstrap();
-			await socketB.bootstrap();
-
-			await socketA.noop(socketB.node);
+			await socketA.noop(udpSocket, { endpoint: socketB.node.endpoints[0] as Nat1Endpoint });
 
 			await new Promise<void>((resolve) => {
 				socketB.on("message", (request) => {
-					if (request.body.type === "noop" && request.sourceNode.isEqualPublicKey(socketA.node)) {
+					if (request.body.type === "noop") {
 						expect(request).toBeDefined();
 
 						resolve();
 					}
 				});
 			});
-		} finally {
-			socketB.close();
-			socketA.close();
-
-			for (const socket of bootstrapSockets) socket.close();
-		}
+		});
 	},
 	INTEGRATION_TEST_TIMEOUT_MS
 );

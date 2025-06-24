@@ -1,16 +1,16 @@
-import { secp256k1 } from "@noble/curves/secp256k1";
-import { base58 } from "@scure/base";
+import { base32crockford } from "@scure/base";
 import { defaults } from "@technically/lodash";
 import EventEmitter from "events";
 import { BOOTSTRAP_NODES } from "../../utilities/bootstrapNodes";
 import { Logger, wrapLogger } from "../../utilities/Logger";
-import { IpType } from "../Address/Constant";
+import { RequiredProperties } from "../../utilities/RequiredProperties";
 import { EventEmitterOptions } from "../EventEmitter";
 import { Keys } from "../Keys";
-import { Node } from "../Node/Codec";
+import { Node } from "../Node";
 import { OverlayTable } from "../OverlayTable";
 import { addOverlayNode } from "./methods/add";
 import { closeOverlay } from "./methods/close";
+import { getOverlayRelay } from "./methods/getRelay";
 import { putOverlayNode } from "./methods/put";
 import { removeOverlayNode } from "./methods/remove";
 import { sampleOverlayNodes } from "./methods/sample";
@@ -25,11 +25,10 @@ export namespace Overlay {
 		update: [Node, Node];
 	}
 
-	export interface Options extends OverlayTable.Options, EventEmitterOptions {
+	export interface Options extends EventEmitterOptions {
 		bootstrapNodes: Array<Node>;
-		ipType: IpType;
 		logger?: Logger;
-		privateKey: Uint8Array;
+		keys: Keys;
 	}
 
 	export type State = 0 | 1;
@@ -41,30 +40,27 @@ export class Overlay extends EventEmitter<Overlay.EventMap> {
 		OPENED: 1,
 	} as const;
 
-	public addressSet = new Set<string>();
-	public healthcheckInterval?: NodeJS.Timeout;
 	public keys: Keys;
 	public logger?: Logger;
+	public networkAddressSet = new Set<string>();
 	public options: Overlay.Options;
 	public state: Overlay.State = Overlay.STATE.CLOSED;
 	public table: OverlayTable;
 
-	constructor(options: Partial<Overlay.Options>) {
+	constructor(options: RequiredProperties<Overlay.Options, "keys">) {
 		const defaultOptions = defaults(
 			{ ...options },
 			{
 				bootstrapNodes: BOOTSTRAP_NODES,
-				ipType: IpType.IPV4,
-				privateKey: secp256k1.utils.randomPrivateKey(),
 			}
 		);
 
 		super(defaultOptions);
 
-		this.keys = new Keys({ privateKey: defaultOptions.privateKey });
-		this.logger = wrapLogger(defaultOptions.logger, `OVERLAY ${base58.encode(this.keys.publicKey).slice(-4)}`);
+		this.keys = defaultOptions.keys;
+		this.logger = wrapLogger(defaultOptions.logger, `OVERLAY ${base32crockford.encode(this.keys.diceAddress).slice(-4)}`);
 		this.options = defaultOptions;
-		this.table = new OverlayTable(this.keys.publicKey, defaultOptions);
+		this.table = new OverlayTable(this.keys.diceAddress);
 
 		this.state = Overlay.STATE.OPENED;
 		this.emit("open");
@@ -72,6 +68,7 @@ export class Overlay extends EventEmitter<Overlay.EventMap> {
 
 	add = addOverlayNode.bind(this, this);
 	close = closeOverlay.bind(this, this);
+	getRelay = getOverlayRelay.bind(this, this);
 	put = putOverlayNode.bind(this, this);
 	remove = removeOverlayNode.bind(this, this);
 	sample = sampleOverlayNodes.bind(this, this);

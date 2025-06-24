@@ -1,6 +1,6 @@
-import { base58 } from "@scure/base";
+import { base32crockford } from "@scure/base";
 import { Overlay } from "..";
-import { Node } from "../../Node/Codec";
+import { Node } from "../../Node";
 
 export const removeOverlayNode = (overlay: Overlay, node: Node): boolean => {
 	const id = overlay.table.getId(node);
@@ -8,9 +8,11 @@ export const removeOverlayNode = (overlay: Overlay, node: Node): boolean => {
 	const result = overlay.table.remove(id);
 
 	if (result) {
-		overlay.addressSet.delete(node.address.toString());
+		for (const endpoint of node.endpoints) {
+			if ("networkAddress" in endpoint) overlay.networkAddressSet.delete(endpoint.networkAddress.toString());
+		}
 
-		overlay.logger?.debug(`Removed node ${base58.encode(id)}`);
+		overlay.logger?.debug(`Removed node ${base32crockford.encode(id)}`);
 
 		overlay.emit("remove", node);
 	}

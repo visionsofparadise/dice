@@ -1,44 +1,65 @@
 import { Socket } from "..";
 import { createId } from "../../../utilities/Id";
+import { Nat } from "../../Endpoint/Constant";
+import { Nat1Endpoint } from "../../Endpoint/Nat1";
+import { Nat3Endpoint } from "../../Endpoint/Nat3";
+import { DiceError } from "../../Error";
 import { Message } from "../../Message";
-import { ResponseCode } from "../../Message/ResponseCode";
-import { NatType } from "../../Node/Constant";
-import { Nat3Node } from "../../Node/Nat3";
+import { MessageBodyMap } from "../../Message/BodyCodec";
+import { NetworkAddress } from "../../NetworkAddress";
+import { RoutableTarget, Source } from "../../Target/Codec";
 import { AwaitSocketResponseOptions } from "./awaitResponse";
 
-export const sendSocketPunch = async (socket: Socket, targetNode: Nat3Node, properties?: Partial<Message.Properties<"punch">>, options?: AwaitSocketResponseOptions): Promise<void> => {
-	if (socket.node.natType === NatType.NAT4) throw new Error("Unable to punch from nat4 node");
+export interface SendSocketPunchOptions extends AwaitSocketResponseOptions {
+	isPrePunchDisabled?: boolean;
+}
 
-	const cacheKey = socket.createCacheKey(targetNode.address);
+export const sendSocketPunch = async (
+	socket: Socket,
+	udpSocket: Socket.UdpSocket,
+	target: RoutableTarget<Nat1Endpoint | Nat3Endpoint>,
+	body?: Partial<MessageBodyMap["punch"]>,
+	options?: SendSocketPunchOptions
+): Promise<void> => {
+	const endpoint = socket.internalEndpointMap.get(NetworkAddress.fromRemoteInfo(udpSocket.address()).toString());
+
+	if (!endpoint || endpoint.nat === Nat.NAT4) throw new DiceError("Source endpoint for udpSocket not found");
+
+	const cacheKey = `${endpoint.networkAddress.toString()}-${target.endpoint.networkAddress.toString()}`;
 
 	if (!socket.cache.punch.has(cacheKey)) {
-		const noopRequest = new Message({
-			...properties,
-			sourceNode: socket.node,
-			targetNode,
-			body: {
-				type: "noop",
+		if (!options?.isPrePunchDisabled) await socket.noop(udpSocket, target);
+
+		const punchRequest = Message.create(
+			{
+				node: socket.node,
+				body: {
+					type: "punch",
+					transactionId: createId(),
+					endpoint,
+					...body,
+				},
 			},
-		});
+			socket.keys
+		);
 
-		await socket.send(noopRequest, targetNode.address);
+		const source: Source<Nat1Endpoint | Nat3Endpoint> = {
+			endpoint,
+		};
 
-		const punchRequest = new Message({
-			...properties,
-			sourceNode: socket.node,
-			targetNode,
-			body: {
-				type: "punch",
-				transactionId: createId(),
+		const relay = socket.getRelay(source, target, punchRequest);
+
+		await socket.sendUdp(udpSocket, relay.target, relay.message);
+
+		await socket.awaitResponse(
+			{
+				node: target,
+				body: {
+					type: "successResponse",
+					transactionId: punchRequest.body.transactionId,
+				},
 			},
-		});
-
-		await socket.send(punchRequest, targetNode.relayNode.address);
-
-		const response = await socket.awaitResponse(punchRequest.body.transactionId, options);
-
-		if (response.body.code !== ResponseCode.SUCCESS_NO_CONTENT) throw new Error("Invalid response");
-
-		socket.cache.punch.set(cacheKey);
+			options
+		);
 	}
 };

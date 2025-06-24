@@ -1,49 +1,38 @@
-import { spawnIntegrationBootstrapSockets } from "../../../utilities/spawnIntegrationBootstrapNodes";
-import { INTEGRATION_TEST_TIMEOUT_MS, spawnIntegrationSocket } from "../../../utilities/spawnIntegrationSocket";
+import { INTEGRATION_TEST_TIMEOUT_MS, spawnIntegrationSocketPair } from "../../../utilities/spawnIntegrationSocket";
+import { Endpoint } from "../../Endpoint/Codec";
+import { Nat } from "../../Endpoint/Constant";
 import { Message } from "../../Message";
-import { Nat1Node } from "../../Node/Nat1";
 
 it(
 	"sends message",
 	async () => {
-		const bootstrapSockets = await spawnIntegrationBootstrapSockets();
-		const bootstrapNodes = bootstrapSockets.map((socket) => socket.node as Nat1Node);
+		await spawnIntegrationSocketPair(async (socketA, socketB) => {
+			const arc = Endpoint.getArc(socketA.node.endpoints, socketB.node.endpoints);
 
-		const socketA = spawnIntegrationSocket({ bootstrapNodes, port: 4000 });
-		const socketB = spawnIntegrationSocket({ bootstrapNodes, port: 4001 });
+			if (!arc || arc.target.endpoint.nat === Nat.NAT4) throw new Error();
 
-		try {
-			socketA.open();
-			socketB.open();
-
-			await socketA.bootstrap();
-			await socketB.bootstrap();
-
-			const message = new Message({
-				sourceNode: socketA.node,
-				targetNode: socketB.node,
-				body: {
-					type: "noop",
+			const message = Message.create(
+				{
+					node: socketA.node,
+					body: {
+						type: "noop",
+					},
 				},
-			});
+				socketA.keys
+			);
 
-			await socketA.send(message);
+			await socketA.send(arc.source, { endpoint: arc.target.endpoint }, message);
 
 			await new Promise<void>((resolve) => {
 				socketB.on("message", (request) => {
-					if (request.body.type === "noop" && request.sourceNode.isEqualPublicKey(socketA.node)) {
+					if (request.body.type === "noop") {
 						expect(request).toBeDefined();
 
 						resolve();
 					}
 				});
 			});
-		} finally {
-			socketB.close();
-			socketA.close();
-
-			for (const socket of bootstrapSockets) socket.close();
-		}
+		});
 	},
 	INTEGRATION_TEST_TIMEOUT_MS
 );

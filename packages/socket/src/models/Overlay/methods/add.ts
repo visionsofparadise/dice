@@ -1,14 +1,16 @@
-import { base58 } from "@scure/base";
+import { base32crockford } from "@scure/base";
 import { Overlay } from "..";
-import { Node } from "../../Node/Codec";
+import { Node } from "../../Node";
 
 export const addOverlayNode = (overlay: Overlay, node: Node): boolean => {
 	const result = overlay.table.add(node);
 
 	if (result) {
-		overlay.addressSet.add(node.address.toString());
+		for (const endpoint of node.endpoints) {
+			if ("networkAddress" in endpoint) overlay.networkAddressSet.add(endpoint.networkAddress.toString());
+		}
 
-		overlay.logger?.debug(`Added node ${base58.encode(overlay.table.getId(node))}`);
+		overlay.logger?.debug(`Added node ${base32crockford.encode(overlay.table.getId(node))}`);
 
 		overlay.emit("add", node);
 	}

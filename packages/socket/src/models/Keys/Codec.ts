@@ -1,13 +1,16 @@
 import { Codec } from "bufferfy";
 import { Keys } from ".";
+import { ShortHashCodec } from "../../utilities/Hash";
+
+export const DiceAddressCodec = ShortHashCodec;
 
 export const PrivateKeyCodec = Codec.Bytes(32);
 export const PublicKeyCodec = Codec.Bytes(33);
 export const SignatureCodec = Codec.Bytes(64);
 
 export const RSignatureCodec = Codec.Object({
+	recoveryBit: Codec.UInt(8),
 	signature: SignatureCodec,
-	r: Codec.UInt(8),
 });
 
 export interface RSignature extends Codec.Type<typeof RSignatureCodec> {}

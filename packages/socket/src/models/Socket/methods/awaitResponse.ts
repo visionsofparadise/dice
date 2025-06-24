@@ -1,59 +1,75 @@
+import { hex } from "@scure/base";
 import { compare } from "uint8array-tools";
 import { Socket } from "..";
+import { DiceError } from "../../Error";
 import { Message } from "../../Message";
+import { MessageBodyType } from "../../Message/BodyCodec";
 
 export interface AwaitSocketResponseOptions {
 	signal?: AbortSignal;
 	timeoutMs?: number;
 }
 
-export const awaitSocketResponse = async (
-	socket: Socket,
-	transactionId: Uint8Array,
-	options: AwaitSocketResponseOptions | undefined = socket.options.defaultAwaitResponseOptions
-): Promise<Message<"response">> => {
-	return new Promise<Message<"response">>(async (resolve, reject) => {
-		if (options?.signal?.aborted) return reject(new Error("Sending aborted"));
-		if (socket.state === Socket.STATE.CLOSED) return reject(new Error("Socket is closed"));
+export type ResponseBodyType = Extract<MessageBodyType, "reflectResponse" | "revealResponse" | "listNodesResponse" | "successResponse" | "badRequestErrorResponse" | "internalErrorResponse">;
+
+export interface ResponseBodyAssertions<T extends ResponseBodyType> {
+	node: {
+		diceAddress: Uint8Array;
+	};
+	body: {
+		type: T;
+		transactionId: Uint8Array;
+	};
+}
+
+export const awaitSocketResponse = async <T extends ResponseBodyType>(socket: Socket, assertions: ResponseBodyAssertions<T>, options?: AwaitSocketResponseOptions): Promise<Message<T>> => {
+	options = { ...socket.options, ...options };
+
+	const key = hex.encode(assertions.body.transactionId);
+
+	return new Promise<Message<T>>(async (resolve, reject) => {
+		if (options?.signal?.aborted) return reject(new DiceError("Awaiting response aborted"));
+		if (socket.state === Socket.STATE.CLOSED) return reject(new DiceError("Socket is closed"));
 
 		let abortListener: (() => void) | undefined;
-		let messageListener: ((message: Message) => void) | undefined;
+		let responseListener: ((message: Message) => void) | undefined;
 		let timeout: NodeJS.Timeout | undefined;
 
 		const clearHandlers = () => {
-			if (abortListener) options?.signal?.removeEventListener("abort", abortListener);
-			if (messageListener) socket.removeListener("message", messageListener);
+			if (abortListener) {
+				socket.closeController.signal.removeEventListener("abort", abortListener);
+				options?.signal?.removeEventListener("abort", abortListener);
+			}
+
+			if (responseListener) socket.responseListenerMap.delete(key);
 			if (timeout) clearTimeout(timeout);
 		};
 
 		abortListener = () => {
 			clearHandlers();
 
-			reject(new Error("Sending aborted"));
+			reject(new DiceError("Awaiting response aborted"));
 		};
 
+		socket.closeController.signal.addEventListener("abort", abortListener);
 		options?.signal?.addEventListener("abort", abortListener);
 
-		messageListener = (response: Message) => {
-			try {
-				if (response.body.type === "response" && response.body.transactionId && compare(response.body.transactionId, transactionId) === 0) {
-					clearHandlers();
+		responseListener = (response: Message) => {
+			clearHandlers();
 
-					if (response.body.code >= 300) return reject(response);
-
-					return resolve(response as Message<"response">);
-				}
-			} catch (error) {
-				socket.emit("error", error);
+			if (response.body.type === assertions.body.type && compare(response.node.diceAddress, assertions.node.diceAddress) === 0) {
+				return resolve(response as Message<T>);
 			}
+
+			return reject(response);
 		};
 
-		socket.on("message", messageListener);
+		socket.responseListenerMap.set(key, responseListener);
 
 		timeout = setTimeout(() => {
 			clearHandlers();
 
-			reject(new Error("Sending timed out"));
+			reject(new DiceError("Awaiting response timed out"));
 		}, options?.timeoutMs || 3_000);
 	});
 };

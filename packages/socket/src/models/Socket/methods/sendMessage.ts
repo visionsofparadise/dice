@@ -1,31 +1,17 @@
 import { Socket } from "..";
-import { Address } from "../../Address";
+import { Endpoint } from "../../Endpoint/Codec";
+import { Nat1Endpoint } from "../../Endpoint/Nat1";
+import { Nat3Endpoint } from "../../Endpoint/Nat3";
+import { DiceError } from "../../Error";
 import { Message } from "../../Message";
+import { Source, Target } from "../../Target/Codec";
 
-export const sendSocketMessage = async (socket: Socket, message: Message, address?: Address): Promise<void> => {
-	if (socket.state !== Socket.STATE.OPENED) throw new Error("Socket is closed");
+export const sendSocketMessage = async (socket: Socket, source: Source<Endpoint>, target: Target<Nat1Endpoint | Nat3Endpoint>, message: Message): Promise<void> => {
+	if (socket.state !== Socket.STATE.OPENED) throw new DiceError("Socket is closed");
 
-	address ??= await socket.route(message);
+	const udpSocket = socket.externalUdpSocketMap.get(source.endpoint.key);
 
-	if (address.toString() === socket.node.address.toString()) {
-		socket.emit("message", message, { socket, remoteInfo: address.toRemoteInfo(message.byteLength) });
+	if (!udpSocket) throw new DiceError("Source endpoint udpSocket not found");
 
-		return;
-	}
-
-	return new Promise<void>((resolve, reject) => {
-		socket.rawSocket.send(message.buffer, address.port, address.ip.value, (error) => {
-			// socket.logger?.debug(
-			// 	`MESSAGE SENT${"transactionId" in message.body ? `\ntid: ${hex.encode(message.body.transactionId)}` : ""}\ntype: ${message.body.type}\nfrom: ${base58.encode(message.sourceNode.publicKey)}\nto: ${base58.encode(message.targetNode.publicKey)}`
-			// );
-
-			if (error) {
-				socket.logger?.error(error);
-
-				return reject(new Error("Sending failed"));
-			}
-
-			return resolve();
-		});
-	});
+	return socket.sendUdp(udpSocket, target, message);
 };

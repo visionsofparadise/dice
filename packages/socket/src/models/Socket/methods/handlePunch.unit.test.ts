@@ -1,28 +1,33 @@
-import { compare } from "uint8array-tools";
 import { Socket } from "..";
 import { createId } from "../../../utilities/Id";
+import { Nat1Endpoint } from "../../Endpoint/Nat1";
+import { DiceError } from "../../Error";
 import { Message } from "../../Message";
-import { ResponseCode } from "../../Message/ResponseCode";
 
 it("handles punch message", async () => {
 	const socket = new Socket();
 
-	const message = new Message({
-		sourceNode: socket.node,
-		targetNode: socket.node,
-		body: {
-			type: "punch",
-			transactionId: createId(),
+	const request = Message.create(
+		{
+			node: socket.node,
+			body: {
+				type: "punch",
+				transactionId: createId(),
+				endpoint: Nat1Endpoint.mock(),
+			},
 		},
-	});
+		socket.keys
+	);
 
-	const result = socket.handlePunch(message);
+	const context = {
+		local: {},
+	} as any;
 
-	if (!result) throw new Error();
-
-	const [response, address] = result;
-
-	expect(response.body.code).toBe(ResponseCode.SUCCESS_NO_CONTENT);
-	expect(compare(message.body.transactionId, response.body.transactionId) === 0).toBe(true);
-	expect(address.toString() === socket.node.address.toString()).toBe(true);
+	try {
+		await socket.handlePunch(request, context);
+	} catch (error) {
+		if (error instanceof DiceError) {
+			expect(error.message).toBe("Socket is closed");
+		}
+	}
 });

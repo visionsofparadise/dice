@@ -1,48 +1,44 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
-import { base58 } from "@scure/base";
+import { base32crockford } from "@scure/base";
 import { defaults } from "@technically/lodash";
-import { createSocket, RemoteInfo, Socket as UdpSocket, SocketOptions as UdpSocketOptions } from "dgram";
+import { Socket as NodeUdpSocket, RemoteInfo } from "dgram";
 import EventEmitter from "events";
-import portControl from "nat-puncher";
 import { BOOTSTRAP_NODES } from "../../utilities/bootstrapNodes";
 import { Logger, wrapLogger } from "../../utilities/Logger";
-import { Address } from "../Address";
-import { Ip } from "../Address/Codec";
-import { IP_TYPE_UDP_TYPE_MAPPING, IpType } from "../Address/Constant";
 import { Cache } from "../Cache";
+import { Endpoint } from "../Endpoint/Codec";
+import { Nat } from "../Endpoint/Constant";
 import { EventEmitterOptions } from "../EventEmitter";
 import { Keys } from "../Keys";
 import { Message } from "../Message";
-import { Node } from "../Node/Codec";
-import { NatType } from "../Node/Constant";
-import { Nat1Node } from "../Node/Nat1";
+import { NetworkAddress } from "../NetworkAddress";
+import { Node } from "../Node";
 import { Overlay } from "../Overlay";
-import { OverlayTable } from "../OverlayTable";
-import { awaitSocketResponse, AwaitSocketResponseOptions } from "./methods/awaitResponse";
+import { awaitSocketResponse, AwaitSocketResponseOptions, ResponseBodyAssertions, ResponseBodyType } from "./methods/awaitResponse";
 import { bootstrapSocket } from "./methods/bootstrap";
-import { bootstrapSocketNat1Node } from "./methods/bootstrapNat1Node";
-import { bootstrapSocketNat3Node } from "./methods/bootstrapNat3Node";
-import { bootstrapSocketNat4Node } from "./methods/bootstrapNat4Node";
-import { bootstrapSocketNode } from "./methods/bootstrapNode";
 import { bootstrapSocketOverlay } from "./methods/bootstrapOverlay";
 import { closeSocket } from "./methods/close";
-import { createSocketCacheKey } from "./methods/createCacheKey";
 import { findSocketNode } from "./methods/findNode";
 import { findSocketNodes } from "./methods/findNodes";
 import { getSocketExternalAddress } from "./methods/getExternalAddress";
+import { getSocketRelay } from "./methods/getRelay";
 import { handleSocketBuffer } from "./methods/handleBuffer";
 import { handleSocketListNodes } from "./methods/handleListNodes";
 import { handleSocketMessage } from "./methods/handleMessage";
+import { handleSocketMessageNodes } from "./methods/handleMessageNodes";
 import { handleSocketPing } from "./methods/handlePing";
 import { handleSocketPunch } from "./methods/handlePunch";
 import { handleSocketReflect } from "./methods/handleReflect";
+import { handleSocketRelay } from "./methods/handleRelay";
+import { handleSocketResponse } from "./methods/handleResponse";
+import { handleSocketReveal } from "./methods/handleReveal";
 import { healthcheckSocketNode } from "./methods/healthcheckNode";
 import { healthcheckSocketOverlay } from "./methods/healthcheckOverlay";
+import { isSocketEndpointNat1 } from "./methods/isSocketEndpointNat1";
 import { iterateSocketNodes } from "./methods/iterateNodes";
 import { openSocket } from "./methods/open";
-import { processSocketNode } from "./methods/processNode";
-import { routeSocketMessage } from "./methods/route";
-import { searchSocketNodes } from "./methods/searchNode";
+import { routeSocketMessage } from "./methods/routeMessage";
+import { searchSocketNode } from "./methods/searchNode";
 import { sendSocketListNodes } from "./methods/sendListNodes";
 import { sendSocketMessage } from "./methods/sendMessage";
 import { sendSocketNoop } from "./methods/sendNoop";
@@ -50,36 +46,41 @@ import { sendSocketPing } from "./methods/sendPing";
 import { sendSocketPunch } from "./methods/sendPunch";
 import { sendSocketPutData } from "./methods/sendPutData";
 import { sendSocketReflect } from "./methods/sendReflect";
-import { updateSocketRelayNode } from "./methods/updateRelayNode";
+import { sendSocketReveal } from "./methods/sendReveal";
+import { sendSocketUdpMessage } from "./methods/sendUdpMessage";
 
 export namespace Socket {
 	export interface EventMap {
 		close: [];
 		data: [Uint8Array, DataContext];
 		error: [unknown];
+		localNode: [Node, Node];
 		message: [Message, MessageContext];
-		node: [Node];
 		open: [];
+		remoteNode: [Node];
 	}
 
-	export interface Options extends EventEmitterOptions, Partial<Overlay.Options>, Partial<OverlayTable.Options> {
-		bootstrapNodes: Array<Nat1Node>;
+	export interface Options extends AwaitSocketResponseOptions, EventEmitterOptions {
+		bootstrapNodes: Array<Node>;
 		cacheSize: number;
 		concurrency: number;
-		createSocket: (options: UdpSocketOptions) => Socket.RawSocket;
-		defaultAwaitResponseOptions?: Partial<AwaitSocketResponseOptions>;
 		generation: number;
 		healthcheckIntervalMs: number;
-		ip: Ip;
-		isPortMappingDisabled: boolean;
 		logger?: Logger;
-		natType?: NatType;
-		port: number;
+		natType?: Nat;
 		privateKey: Uint8Array;
+		udpSockets: Array<Socket.UdpSocket>;
 	}
 
 	export interface MessageContext {
-		remoteInfo: RemoteInfo;
+		local: {
+			endpoint: Endpoint;
+			udpSocket: Socket.UdpSocket;
+		};
+		remote: {
+			info: RemoteInfo;
+			networkAddress: NetworkAddress;
+		};
 		socket: Socket;
 	}
 
@@ -87,7 +88,7 @@ export namespace Socket {
 		message: Message;
 	}
 
-	export type RawSocket = Pick<UdpSocket, "bind" | "close" | "on" | "removeListener" | "send">;
+	export type UdpSocket = Pick<NodeUdpSocket, "address" | "close" | "on" | "removeListener" | "send" | "unref">;
 	export type State = 0 | 1;
 }
 
@@ -97,105 +98,95 @@ export class Socket extends EventEmitter<Socket.EventMap> {
 		OPENED: 1,
 	} as const;
 
-	public cache: { contact: Cache; health: Cache; punch: Cache };
+	public cache: { contact: Cache<undefined>; punch: Cache<undefined>; reveal: Cache<NetworkAddress> };
+	public closeController: AbortController;
+	public externalUdpSocketMap = new Map<string, Socket.UdpSocket>();
 	public healthcheckNodeInterval?: NodeJS.Timeout;
 	public healthcheckOverlayInterval?: NodeJS.Timeout;
-	public isBootstrappingNode = false;
+	public internalEndpointMap = new Map<string, Endpoint>();
 	public isBootstrappingOverlay = false;
 	public isHealthcheckingNode = false;
 	public isHealthcheckingOverlay = false;
 	public keys: Keys;
-	public localAddress: Address;
 	public logger?: Logger;
-	public node: Node;
 	public options: Socket.Options;
 	public overlay: Overlay;
-	public portControl: any;
-	public rawSocket: Socket.RawSocket;
+	public responseListenerMap = new Map<string, (message: Message, context: Socket.MessageContext) => any>();
 	public state: Socket.State = Socket.STATE.CLOSED;
+	public udpSockets: Array<Socket.UdpSocket>;
 
 	constructor(options?: Partial<Socket.Options>) {
-		const defaultOptions = defaults(
-			{ ...options },
-			{
-				bootstrapNodes: BOOTSTRAP_NODES,
-				cacheSize: 10_000,
-				concurrency: 3,
-				createSocket,
-				generation: 0,
-				healthcheckIntervalMs: 10_000,
-				ip: {
-					type: IpType.IPV4,
-					value: "127.0.0.1",
-				},
-				isPortMappingDisabled: false,
-				port: 6173,
-				privateKey: secp256k1.utils.randomPrivateKey(),
-			}
-		);
+		const defaultOptions = defaults(options, {
+			bootstrapNodes: BOOTSTRAP_NODES,
+			cacheSize: 10_000,
+			concurrency: 3,
+			generation: 0,
+			healthcheckIntervalMs: 10_000,
+			privateKey: secp256k1.utils.randomPrivateKey(),
+			udpSockets: [],
+		});
 
 		super(defaultOptions);
 
 		this.cache = {
 			contact: new Cache(3_600_000, defaultOptions.cacheSize),
-			health: new Cache(3_000, defaultOptions.cacheSize),
 			punch: new Cache(3_000, defaultOptions.cacheSize),
+			reveal: new Cache(3_000, defaultOptions.cacheSize),
 		};
+		this.closeController = new AbortController();
 		this.keys = new Keys({ privateKey: defaultOptions.privateKey });
-		this.localAddress = new Address({
-			ip: defaultOptions.ip,
-			port: defaultOptions.port,
-		});
-		this.logger = wrapLogger(defaultOptions.logger, `SOCKET ${base58.encode(this.keys.publicKey).slice(-4)}`);
-		this.node = Nat1Node.create(
+		this.logger = wrapLogger(defaultOptions.logger, `DICE SOCKET ${base32crockford.encode(this.keys.publicKey).slice(-4)}`);
+		this._node = Node.create(
 			{
-				address: this.localAddress,
 				generation: defaultOptions.generation,
-				isDisabled: true,
 			},
 			this.keys
 		);
+		this.node = this._node;
 		this.options = defaultOptions;
 		this.overlay = new Overlay({
-			...this.options,
-			ipType: this.localAddress.ip.type,
+			bootstrapNodes: this.options.bootstrapNodes,
+			logger: this.options.logger,
+			keys: this.keys,
 		});
-		this.portControl = portControl;
-		this.rawSocket = this.options.createSocket({ type: IP_TYPE_UDP_TYPE_MAPPING[this.localAddress.ip.type], reuseAddr: true, reusePort: true });
+		this.udpSockets = defaultOptions.udpSockets;
 
 		this.setMaxListeners(Infinity);
 	}
 
-	awaitResponse = awaitSocketResponse.bind(this, this);
+	awaitResponse = async <T extends ResponseBodyType>(assertions: ResponseBodyAssertions<T>, options?: AwaitSocketResponseOptions): Promise<Message<T>> => {
+		return awaitSocketResponse(this, assertions, options);
+	};
+
 	bootstrap = bootstrapSocket.bind(this, this);
 	close = closeSocket.bind(this, this);
-	createCacheKey = createSocketCacheKey.bind(this, this);
 	open = openSocket.bind(this, this);
 	route = routeSocketMessage.bind(this, this);
 	send = sendSocketMessage.bind(this, this);
+	sendUdp = sendSocketUdpMessage.bind(this, this);
 
-	bootstrapNat1Node = bootstrapSocketNat1Node.bind(this, this);
-	bootstrapNat3Node = bootstrapSocketNat3Node.bind(this, this);
-	bootstrapNat4Node = bootstrapSocketNat4Node.bind(this, this);
-	bootstrapNode = bootstrapSocketNode.bind(this, this);
 	getExternalAddress = getSocketExternalAddress.bind(this, this);
 	healthcheckNode = healthcheckSocketNode.bind(this, this);
-	processNode = processSocketNode.bind(this, this);
-	updateRelayNode = updateSocketRelayNode.bind(this, this);
+	isSocketEndpointNat1 = isSocketEndpointNat1.bind(this, this);
 
 	bootstrapOverlay = bootstrapSocketOverlay.bind(this, this);
 	findNode = findSocketNode.bind(this, this);
 	findNodes = findSocketNodes.bind(this, this);
+	getRelay = getSocketRelay.bind(this, this);
 	healthcheckOverlay = healthcheckSocketOverlay.bind(this, this);
 	iterateNodes = iterateSocketNodes.bind(this, this);
-	searchNode = searchSocketNodes.bind(this, this);
+	searchNode = searchSocketNode.bind(this, this);
 
 	handleBuffer = handleSocketBuffer.bind(this, this);
 	handleMessage = handleSocketMessage.bind(this, this);
+	handleMessageNodes = handleSocketMessageNodes.bind(this, this);
 	handleListNodes = handleSocketListNodes.bind(this, this);
 	handlePing = handleSocketPing.bind(this, this);
 	handlePunch = handleSocketPunch.bind(this, this);
 	handleReflect = handleSocketReflect.bind(this, this);
+	handleRelay = handleSocketRelay.bind(this, this);
+	handleResponse = handleSocketResponse.bind(this, this);
+	handleReveal = handleSocketReveal.bind(this, this);
 
 	listNodes = sendSocketListNodes.bind(this, this);
 	noop = sendSocketNoop.bind(this, this);
@@ -203,10 +194,11 @@ export class Socket extends EventEmitter<Socket.EventMap> {
 	punch = sendSocketPunch.bind(this, this);
 	putData = sendSocketPutData.bind(this, this);
 	reflect = sendSocketReflect.bind(this, this);
+	reveal = sendSocketReveal.bind(this, this);
 
 	rawSocketListeners = {
-		messageListener: (buffer: Uint8Array, remoteInfo: RemoteInfo) => {
-			this.handleBuffer(buffer, remoteInfo);
+		messageListener: (buffer: Uint8Array, remoteInfo: RemoteInfo, udpSocket: Socket.UdpSocket) => {
+			this.handleBuffer(buffer, { remote: { info: remoteInfo }, udpSocket });
 		},
 	};
 
@@ -218,4 +210,18 @@ export class Socket extends EventEmitter<Socket.EventMap> {
 			this.logger?.error(error);
 		},
 	};
+
+	private _node: Node;
+
+	get node() {
+		return this._node;
+	}
+
+	set node(nextNode: Node) {
+		const previousNode = this.node;
+
+		this._node = nextNode;
+
+		this.emit("localNode", previousNode, nextNode);
+	}
 }

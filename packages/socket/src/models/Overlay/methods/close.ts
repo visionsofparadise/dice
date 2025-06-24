@@ -1,7 +1,7 @@
 import { Overlay } from "..";
 
 export const closeOverlay = (overlay: Overlay): void => {
-	overlay.addressSet.clear();
+	overlay.networkAddressSet.clear();
 	overlay.table.clear();
 
 	overlay.state = Overlay.STATE.CLOSED;

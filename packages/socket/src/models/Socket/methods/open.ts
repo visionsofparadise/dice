@@ -1,10 +1,14 @@
+import { RemoteInfo } from "dgram";
 import { Socket } from "..";
 
-export const openSocket = (socket: Socket): void => {
+export const openSocket = async (socket: Socket, isBootstrapping = true): Promise<void> => {
+	if (socket.state === Socket.STATE.OPENED) return;
+
 	socket.logger?.info("Opening");
 
-	socket.rawSocket.bind(socket.localAddress.port, socket.localAddress.ip.value);
-	socket.rawSocket.on("message", socket.rawSocketListeners.messageListener);
+	for (const udpSocket of socket.udpSockets) {
+		udpSocket.on("message", (buffer: Uint8Array, remoteInfo: RemoteInfo) => socket.rawSocketListeners.messageListener(buffer, remoteInfo, udpSocket));
+	}
 
 	socket.on("message", socket.socketListeners.messageListener);
 	socket.on("error", socket.socketListeners.errorListener);
@@ -15,4 +19,6 @@ export const openSocket = (socket: Socket): void => {
 	socket.state = Socket.STATE.OPENED;
 	socket.emit("open");
 	socket.logger?.info("Open");
+
+	if (isBootstrapping) await socket.bootstrap();
 };

@@ -1,8 +1,19 @@
 import { Codec } from "bufferfy";
-import { Nat1NodeCodec } from "./Nat1/Codec";
-import { Nat3NodeCodec } from "./Nat3/Codec";
-import { Nat4NodeCodec } from "./Nat4/Codec";
+import { Node } from ".";
+import { EndpointCodec } from "../Endpoint/Codec";
+import { RSignatureCodec } from "../Keys/Codec";
 
-export const NodeCodec = Codec.Union([Nat1NodeCodec, Nat3NodeCodec, Nat4NodeCodec], Codec.UInt(8));
+export const NodePropertiesCodec = Codec.Object({
+	endpoints: Codec.Array(EndpointCodec, Codec.UInt(8)),
+	sequenceNumber: Codec.VarInt(60),
+	generation: Codec.VarInt(60),
+	rSignature: RSignatureCodec,
+});
 
-export type Node = Codec.Type<typeof NodeCodec>;
+export interface NodeProperties extends Codec.Type<typeof NodePropertiesCodec> {}
+
+export const NodeCodec = Codec.Transform(NodePropertiesCodec, {
+	isValid: (value) => value instanceof Node,
+	decode: (properties, buffer) => new Node(properties, { buffer, byteLength: buffer.byteLength }),
+	encode: (node) => node.properties,
+});

@@ -1,27 +1,14 @@
-import { spawnIntegrationBootstrapSockets } from "../../../utilities/spawnIntegrationBootstrapNodes";
-import { INTEGRATION_TEST_TIMEOUT_MS, spawnIntegrationSocket } from "../../../utilities/spawnIntegrationSocket";
-import { Nat1Node } from "../../Node/Nat1";
+import { INTEGRATION_TEST_TIMEOUT_MS, spawnIntegrationSocketPair } from "../../../utilities/spawnIntegrationSocket";
 
 it(
-	"gets external address",
+	"gets external networkAddress",
 	async () => {
-		const bootstrapSockets = await spawnIntegrationBootstrapSockets();
-		const bootstrapNodes = bootstrapSockets.map((socket) => socket.node as Nat1Node);
+		await spawnIntegrationSocketPair(async (socketA) => {
+			const { networkAddressA, networkAddressB } = await socketA.getExternalAddress(socketA.udpSockets[0]!);
 
-		const socketA = spawnIntegrationSocket({ bootstrapNodes, port: 4000 });
-
-		try {
-			socketA.open();
-
-			const { addressA, addressB } = await socketA.getExternalAddress();
-
-			expect(addressA.toString()).toBe(socketA.node.address.toString());
-			expect(addressA.toString() === addressB.toString()).toBe(true);
-		} finally {
-			socketA.close();
-
-			for (const socket of bootstrapSockets) socket.close();
-		}
+			expect(networkAddressA.toString()).toBe("127.0.0.1:4000");
+			expect(networkAddressA.toString() === networkAddressB.toString()).toBe(true);
+		});
 	},
 	INTEGRATION_TEST_TIMEOUT_MS
 );

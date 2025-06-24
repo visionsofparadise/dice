@@ -1,9 +1,11 @@
-import { Codec } from "bufferfy";
 import { Socket } from "..";
 import { createId } from "../../../utilities/Id";
+import { Endpoint } from "../../Endpoint/Codec";
+import { DiceError } from "../../Error";
+import { Keys } from "../../Keys";
 import { Message } from "../../Message";
-import { ResponseCode } from "../../Message/ResponseCode";
-import { Node, NodeCodec } from "../../Node/Codec";
+import { MessageBodyMap } from "../../Message/BodyCodec";
+import { Node } from "../../Node";
 import { AwaitSocketResponseOptions } from "./awaitResponse";
 
 export interface SendListNodesOptions extends AwaitSocketResponseOptions {
@@ -12,35 +14,42 @@ export interface SendListNodesOptions extends AwaitSocketResponseOptions {
 
 export const sendSocketListNodes = async (
 	socket: Socket,
-	targetNode: Node,
-	publicKey: Uint8Array,
-	properties?: Partial<Message.Properties<"listNodes">>,
-	options: SendListNodesOptions = { isAddingNodes: true }
+	node: Node,
+	diceAddress: Uint8Array,
+	body?: Partial<MessageBodyMap["listNodes"]>,
+	options?: AwaitSocketResponseOptions
 ): Promise<Array<Node>> => {
-	const request = new Message({
-		...properties,
-		sourceNode: socket.node,
-		targetNode,
-		body: {
-			type: "listNodes",
-			transactionId: createId(),
-			publicKey,
+	const arc = Endpoint.getArc(socket.node.endpoints, node.endpoints);
+
+	if (!arc) throw new DiceError("Cannot find arc for listNodes");
+
+	const request = Message.create(
+		{
+			node: socket.node,
+			body: {
+				type: "listNodes",
+				transactionId: createId(),
+				diceAddress: Keys.normalizeAddress(diceAddress),
+				...body,
+			},
 		},
-	});
+		socket.keys
+	);
 
-	await socket.send(request);
+	const route = await socket.route(arc.source, { diceAddress: node.diceAddress, endpoint: arc.target.endpoint }, request);
 
-	const response = await socket.awaitResponse(request.body.transactionId, options);
+	await socket.send(route.source, route.target, route.message);
 
-	if (response.body.code !== ResponseCode.SUCCESS) throw new Error("Invalid response");
+	const responseBody = await socket.awaitResponse(
+		{
+			node,
+			body: {
+				type: "listNodesResponse",
+				transactionId: request.body.transactionId,
+			},
+		},
+		options
+	);
 
-	try {
-		const nodes = Codec.Array(NodeCodec).decode(response.body.body);
-
-		if (options.isAddingNodes) await Promise.allSettled(nodes.map((node) => socket.processNode(node)));
-
-		return nodes;
-	} catch (error) {
-		throw new Error("Invalid response");
-	}
+	return responseBody.nodes;
 };

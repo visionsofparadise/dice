@@ -1,24 +1,28 @@
 import { shuffle } from "@technically/lodash";
 import { Overlay } from "..";
-import { Node } from "../../Node/Codec";
+import { Node } from "../../Node";
 
-export const sampleOverlayNodes = (overlay: Overlay, count: number, filter: (node: Node) => boolean): Array<Node> => {
-	const ids: Array<Uint8Array> = [];
-
-	for (const node of overlay.table) {
-		if (!filter(node)) continue;
-
-		ids.push(overlay.table.getId(node));
-	}
-
+export const sampleOverlayNodes = (overlay: Overlay, count: number, filter?: (node: Node) => boolean): Array<Node> => {
 	const nodes: Array<Node> = [];
 
-	for (const id of shuffle(ids).slice(0, count)) {
-		const node = overlay.table.getById(id);
+	const d = Math.floor(Math.random() * overlay.table.buckets.length);
 
-		if (!node) continue;
+	for (const nodes of overlay.table.iterateNodes(d)) {
+		for (const node of nodes) {
+			if (!node.isHealthchecking && (!filter || filter(node))) {
+				nodes.push(node);
 
-		nodes.push(node);
+				if (nodes.length >= count) return nodes;
+			}
+		}
+	}
+
+	for (const node of shuffle(overlay.options.bootstrapNodes)) {
+		if (!node.isHealthchecking && (!filter || filter(node))) {
+			nodes.push(node);
+
+			if (nodes.length >= count) return nodes;
+		}
 	}
 
 	return nodes;

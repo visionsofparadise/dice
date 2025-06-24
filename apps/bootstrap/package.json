@@ -22,8 +22,8 @@
 	},
 	"homepage": "https://github.com/visionsofparadise/dice#readme",
 	"dependencies": {
-		"@xkore/dice": "*",
 		"@scure/base": "^1.2.4",
+		"@xkore/dice": "*",
 		"loglevel": "^1.9.2"
 	},
 	"devDependencies": {

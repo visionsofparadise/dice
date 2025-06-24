@@ -1,26 +1,43 @@
 import { Socket } from "..";
 import { createId } from "../../../utilities/Id";
+import { Endpoint } from "../../Endpoint/Codec";
+import { DiceError } from "../../Error";
 import { Message } from "../../Message";
-import { ResponseCode } from "../../Message/ResponseCode";
-import { Node } from "../../Node/Codec";
+import { MessageBodyMap } from "../../Message/BodyCodec";
+import { Node } from "../../Node";
 import { AwaitSocketResponseOptions } from "./awaitResponse";
 
-export const sendSocketPing = async (socket: Socket, targetNode: Node, properties?: Partial<Message.Properties<"ping">>, options?: AwaitSocketResponseOptions): Promise<Message<"response">> => {
-	const request = new Message({
-		...properties,
-		sourceNode: socket.node,
-		targetNode,
-		body: {
-			type: "ping",
-			transactionId: createId(),
+export const sendSocketPing = async (socket: Socket, node: Node, body?: Partial<MessageBodyMap["ping"]>, options?: AwaitSocketResponseOptions): Promise<Node> => {
+	const arc = Endpoint.getArc(socket.node.endpoints, node.endpoints);
+
+	if (!arc) throw new DiceError("Cannot find arc for ping");
+
+	const request = Message.create(
+		{
+			node: socket.node,
+			body: {
+				type: "ping",
+				transactionId: createId(),
+				...body,
+			},
 		},
-	});
+		socket.keys
+	);
 
-	await socket.send(request);
+	const route = await socket.route(arc.source, { diceAddress: node.diceAddress, endpoint: arc.target.endpoint }, request);
 
-	const response = await socket.awaitResponse(request.body.transactionId, options);
+	await socket.send(route.source, route.target, route.message);
 
-	if (response.body.code !== ResponseCode.SUCCESS_NO_CONTENT) throw new Error("Invalid response");
+	const response = await socket.awaitResponse(
+		{
+			node,
+			body: {
+				type: "successResponse",
+				transactionId: request.body.transactionId,
+			},
+		},
+		options
+	);
 
-	return response;
+	return response.node;
 };

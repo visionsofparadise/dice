@@ -1,17 +1,28 @@
 import { Socket } from "..";
+import { Endpoint } from "../../Endpoint/Codec";
+import { DiceError } from "../../Error";
 import { Message } from "../../Message";
-import { Node } from "../../Node/Codec";
+import { MessageBodyMap } from "../../Message/BodyCodec";
+import { Node } from "../../Node";
 
-export const sendSocketPutData = async (socket: Socket, targetNode: Node, data: Uint8Array, properties?: Partial<Message.Properties<"putData">>): Promise<void> => {
-	const request = new Message({
-		...properties,
-		sourceNode: socket.node,
-		targetNode,
-		body: {
-			type: "putData",
-			data,
+export const sendSocketPutData = async (socket: Socket, node: Node, data: Uint8Array, body?: Partial<MessageBodyMap["putData"]>): Promise<void> => {
+	const arc = Endpoint.getArc(socket.node.endpoints, node.endpoints);
+
+	if (!arc) throw new DiceError("Cannot find arc for putData");
+
+	const request = Message.create(
+		{
+			node: socket.node,
+			body: {
+				type: "putData",
+				data,
+				...body,
+			},
 		},
-	});
+		socket.keys
+	);
 
-	await socket.send(request);
+	const route = await socket.route(arc.source, { diceAddress: node.diceAddress, endpoint: arc.target.endpoint }, request);
+
+	await socket.send(route.source, route.target, route.message);
 };

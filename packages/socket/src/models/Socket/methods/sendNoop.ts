@@ -1,16 +1,19 @@
 import { Socket } from "..";
+import { Nat1Endpoint } from "../../Endpoint/Nat1";
+import { Nat3Endpoint } from "../../Endpoint/Nat3";
 import { Message } from "../../Message";
-import { Node } from "../../Node/Codec";
+import { Target } from "../../Target/Codec";
 
-export const sendSocketNoop = async (socket: Socket, targetNode: Node, properties?: Partial<Message.Properties<"noop">>): Promise<void> => {
-	const request = new Message({
-		...properties,
-		sourceNode: socket.node,
-		targetNode,
-		body: {
-			type: "noop",
+export const sendSocketNoop = async (socket: Socket, udpSocket: Socket.UdpSocket, target: Target<Nat1Endpoint | Nat3Endpoint>): Promise<void> => {
+	const request = Message.create(
+		{
+			node: socket.node,
+			body: {
+				type: "noop",
+			},
 		},
-	});
+		socket.keys
+	);
 
-	await socket.send(request);
+	await socket.sendUdp(udpSocket, target, request);
 };
