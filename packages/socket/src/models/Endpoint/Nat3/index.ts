@@ -1,7 +1,7 @@
 import { hex } from "@scure/base";
-import { createChecksum } from "../../../utilities/Hash";
+import { createChecksum } from "../../../utilities/Checksum";
 import { RequiredProperties } from "../../../utilities/RequiredProperties";
-import { NetworkAddress } from "../../NetworkAddress";
+import { Address } from "../../Address";
 import { Nat } from "../Constant";
 import { Nat3EndpointCodec, Nat3EndpointProperties } from "./Codec";
 import { mockNat3Endpoint } from "./methods/mock";
@@ -21,13 +21,15 @@ export class Nat3Endpoint implements Nat3Endpoint.Properties {
 	static mock = mockNat3Endpoint;
 
 	readonly nat = Nat.NAT3;
-	readonly networkAddress: NetworkAddress;
+	readonly address: Address;
+	relayAddresses: Array<Address>;
 
 	constructor(
-		properties: RequiredProperties<Nat3Endpoint.Properties, "networkAddress">,
+		properties: RequiredProperties<Nat3Endpoint.Properties, "address">,
 		public readonly cache: Nat3Endpoint.Cache = {}
 	) {
-		this.networkAddress = properties.networkAddress;
+		this.address = properties.address;
+		this.relayAddresses = properties.relayAddresses || [];
 	}
 
 	get buffer(): Uint8Array {
@@ -47,8 +49,8 @@ export class Nat3Endpoint implements Nat3Endpoint.Properties {
 	}
 
 	get properties(): Nat3Endpoint.Properties {
-		const { nat, networkAddress } = this;
+		const { nat, address, relayAddresses } = this;
 
-		return { nat, networkAddress };
+		return { nat, address, relayAddresses };
 	}
 }

@@ -1,11 +1,7 @@
 import { Codec } from "bufferfy";
 import { IdCodec } from "../../utilities/Id";
-import { EndpointCodec } from "../Endpoint/Codec";
-import { Nat1EndpointCodec } from "../Endpoint/Nat1/Codec";
-import { Nat3EndpointCodec } from "../Endpoint/Nat3/Codec";
-import { DiceAddressCodec, SignatureCodec } from "../Keys/Codec";
-import { NetworkAddressCodec } from "../NetworkAddress/Codec";
-import { NodeCodec } from "../Node/Codec";
+import { MAGIC_BYTES } from "../../utilities/magicBytes";
+import { AddressCodec } from "../Address/Codec";
 
 export const NoopBodyCodec = Codec.Object({
 	type: Codec.Constant("noop"),
@@ -15,13 +11,22 @@ export interface NoopBody extends Codec.Type<typeof NoopBodyCodec> {}
 
 export const PingBodyCodec = Codec.Object({
 	type: Codec.Constant("ping"),
+	magicBytes: Codec.Bytes(MAGIC_BYTES),
 	transactionId: IdCodec,
 });
 
 export interface PingBody extends Codec.Type<typeof PingBodyCodec> {}
 
+export const PingResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("pingResponse"),
+	transactionId: IdCodec,
+});
+
+export interface PingResponseBody extends Codec.Type<typeof PingResponseBodyCodec> {}
+
 export const ReflectBodyCodec = Codec.Object({
 	type: Codec.Constant("reflect"),
+	magicBytes: Codec.Bytes(MAGIC_BYTES),
 	transactionId: IdCodec,
 });
 
@@ -30,117 +35,64 @@ export interface ReflectBody extends Codec.Type<typeof ReflectBodyCodec> {}
 export const ReflectResponseBodyCodec = Codec.Object({
 	type: Codec.Constant("reflectResponse"),
 	transactionId: IdCodec,
-	networkAddress: NetworkAddressCodec,
+	address: AddressCodec,
 });
 
 export interface ReflectResponseBody extends Codec.Type<typeof ReflectResponseBodyCodec> {}
 
 export const PunchBodyCodec = Codec.Object({
 	type: Codec.Constant("punch"),
+	magicBytes: Codec.Bytes(MAGIC_BYTES),
 	transactionId: IdCodec,
-	endpoint: Codec.Union([Nat1EndpointCodec, Nat3EndpointCodec], Codec.UInt(8)),
+	sourceAddress: AddressCodec,
+	targetAddress: AddressCodec,
 });
 
 export interface PunchBody extends Codec.Type<typeof PunchBodyCodec> {}
 
-export const RevealBodyCodec = Codec.Object({
-	type: Codec.Constant("reveal"),
+export const PunchResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("punchResponse"),
 	transactionId: IdCodec,
-	target: Codec.Object({
-		diceAddress: DiceAddressCodec,
-		endpoint: Nat1EndpointCodec,
-	}),
 });
 
-export interface RevealBody extends Codec.Type<typeof RevealBodyCodec> {}
+export interface PunchResponseBody extends Codec.Type<typeof PunchResponseBodyCodec> {}
 
-export const RevealResponseBodyCodec = Codec.Object({
-	type: Codec.Constant("revealResponse"),
+export const SampleBodyCodec = Codec.Object({
+	type: Codec.Constant("sample"),
+	magicBytes: Codec.Bytes(MAGIC_BYTES),
 	transactionId: IdCodec,
-	networkAddress: NetworkAddressCodec,
 });
 
-export interface RevealResponseBody extends Codec.Type<typeof RevealResponseBodyCodec> {}
+export interface SampleBody extends Codec.Type<typeof SampleBodyCodec> {}
 
-export const ListNodesBodyCodec = Codec.Object({
-	type: Codec.Constant("listNodes"),
+export const SampleResponseBodyCodec = Codec.Object({
+	type: Codec.Constant("sampleResponse"),
 	transactionId: IdCodec,
-	diceAddress: DiceAddressCodec,
+	addresses: Codec.Array(AddressCodec, Codec.UInt(8)),
 });
 
-export interface ListNodesBody extends Codec.Type<typeof ListNodesBodyCodec> {}
+export interface SampleResponseBody extends Codec.Type<typeof SampleResponseBodyCodec> {}
 
-export const ListNodesResponseBodyCodec = Codec.Object({
-	type: Codec.Constant("listNodesResponse"),
-	transactionId: IdCodec,
-	nodes: Codec.Array(NodeCodec, Codec.UInt(8)),
-});
-
-export interface ListNodesResponseBody extends Codec.Type<typeof ListNodesResponseBodyCodec> {}
-
-export const PutDataBodyCodec = Codec.Object({
-	type: Codec.Constant("putData"),
+export const PutBodyCodec = Codec.Object({
+	type: Codec.Constant("put"),
+	magicBytes: Codec.Bytes(MAGIC_BYTES),
 	data: Codec.Bytes(Codec.VarInt(60)),
 });
 
-export interface PutDataBody extends Codec.Type<typeof PutDataBodyCodec> {}
+export interface PutBody extends Codec.Type<typeof PutBodyCodec> {}
 
-export const SuccessResponseBodyCodec = Codec.Object({
-	type: Codec.Constant("successResponse"),
-	transactionId: IdCodec,
-});
-
-export interface SuccessResponseBody extends Codec.Type<typeof SuccessResponseBodyCodec> {}
-
-export const BadRequestErrorResponseBodyCodec = Codec.Object({
-	type: Codec.Constant("badRequestErrorResponse"),
-	transactionId: IdCodec,
-});
-
-export interface BadRequestErrorResponseBody extends Codec.Type<typeof BadRequestErrorResponseBodyCodec> {}
-
-export const InternalErrorResponseBodyCodec = Codec.Object({
-	type: Codec.Constant("internalErrorResponse"),
-	transactionId: IdCodec,
-});
-
-export interface InternalErrorResponseBody extends Codec.Type<typeof InternalErrorResponseBodyCodec> {}
-
-export const RelayableBodyCodec = Codec.Union([
+export const MessageBodyCodec = Codec.Union([
 	NoopBodyCodec,
 	PingBodyCodec,
+	PingResponseBodyCodec,
+	ReflectBodyCodec,
+	ReflectResponseBodyCodec,
 	PunchBodyCodec,
-	RevealBodyCodec,
-	RevealResponseBodyCodec,
-	ListNodesBodyCodec,
-	ListNodesResponseBodyCodec,
-	PutDataBodyCodec,
-	SuccessResponseBodyCodec,
-	BadRequestErrorResponseBodyCodec,
-	InternalErrorResponseBodyCodec,
+	PunchResponseBodyCodec,
+	SampleBodyCodec,
+	SampleResponseBodyCodec,
+	PutBodyCodec,
 ]);
-
-export type RelayableBody = Codec.Type<typeof RelayableBodyCodec>;
-
-export type RelayableBodyMap = {
-	[T in RelayableBody["type"]]: Extract<RelayableBody, { type: T }>;
-};
-
-export type RelayableBodyType = keyof RelayableBodyMap;
-
-export const RelayBodyCodec = Codec.Object({
-	type: Codec.Constant("relay"),
-	target: Codec.Object({
-		diceAddress: DiceAddressCodec,
-		endpoint: EndpointCodec,
-	}),
-	body: RelayableBodyCodec,
-	signature: SignatureCodec,
-});
-
-export interface RelayBody extends Codec.Type<typeof RelayBodyCodec> {}
-
-export const MessageBodyCodec = Codec.Union([ReflectBodyCodec, ReflectResponseBodyCodec, ...RelayableBodyCodec.codecs, RelayBodyCodec]);
 
 export type MessageBody = Codec.Type<typeof MessageBodyCodec>;
 

@@ -6,9 +6,11 @@
 	"private": true,
 	"scripts": {
 		"check": "tsc --noEmit",
-		"build": "esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js && docker build -t xkore/dice-bootstrap:0.0.0 .",
+		"build": "esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js",
+		"build-docker": "docker build -t xkore/dice-bootstrap:0.0.0 .",
 		"start": "ts-node src/index.ts",
-		"publish": "docker push xkore/dice-bootstrap:0.0.0"
+		"start-docker": "docker run --name xkore/dice-bootstrap -p 6000:5173/udp --rm xkore/dice-bootstrap:0.0.0",
+		"publish-docker": "docker push xkore/dice-bootstrap:0.0.0"
 	},
 	"repository": {
 		"type": "git",
@@ -24,6 +26,7 @@
 	"dependencies": {
 		"@scure/base": "^1.2.4",
 		"@xkore/dice": "*",
+		"commander": "^14.0.0",
 		"loglevel": "^1.9.2"
 	},
 	"devDependencies": {

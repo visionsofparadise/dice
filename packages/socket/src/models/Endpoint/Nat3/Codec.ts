@@ -1,11 +1,12 @@
 import { Codec } from "bufferfy";
 import { Nat3Endpoint } from ".";
-import { NetworkAddressCodec } from "../../NetworkAddress/Codec";
+import { AddressCodec } from "../../Address/Codec";
 import { Nat } from "../Constant";
 
 export const Nat3EndpointPropertiesCodec = Codec.Object({
 	nat: Codec.Constant(Nat.NAT3),
-	networkAddress: NetworkAddressCodec,
+	address: AddressCodec,
+	relayAddresses: Codec.Array(AddressCodec, Codec.UInt(8)),
 });
 
 export interface Nat3EndpointProperties extends Codec.Type<typeof Nat3EndpointPropertiesCodec> {}

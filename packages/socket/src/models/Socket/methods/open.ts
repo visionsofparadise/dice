@@ -1,4 +1,3 @@
-import { RemoteInfo } from "dgram";
 import { Socket } from "..";
 
 export const openSocket = async (socket: Socket, isBootstrapping = true): Promise<void> => {
@@ -6,19 +5,10 @@ export const openSocket = async (socket: Socket, isBootstrapping = true): Promis
 
 	socket.logger?.info("Opening");
 
-	for (const udpSocket of socket.udpSockets) {
-		udpSocket.on("message", (buffer: Uint8Array, remoteInfo: RemoteInfo) => socket.rawSocketListeners.messageListener(buffer, remoteInfo, udpSocket));
-	}
-
-	socket.on("message", socket.socketListeners.messageListener);
-	socket.on("error", socket.socketListeners.errorListener);
-
-	socket.healthcheckNodeInterval = setInterval(() => socket.healthcheckNode(), socket.options.healthcheckIntervalMs);
-	socket.healthcheckOverlayInterval = setInterval(() => socket.healthcheckOverlay(), socket.options.healthcheckIntervalMs);
+	socket.session.events.on("data", socket.sessionListeners.dataListener);
+	socket.session.open(isBootstrapping);
 
 	socket.state = Socket.STATE.OPENED;
-	socket.emit("open");
+	socket.events.emit("open");
 	socket.logger?.info("Open");
-
-	if (isBootstrapping) await socket.bootstrap();
 };

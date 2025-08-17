@@ -1,8 +1,8 @@
 import { Nat1Endpoint } from "..";
-import { NetworkAddress } from "../../../NetworkAddress";
+import { Address } from "../../../Address";
 
 export const mockNat1Endpoint = (properties?: Partial<Nat1Endpoint.Properties>) =>
 	new Nat1Endpoint({
-		networkAddress: NetworkAddress.mock(),
+		address: Address.mock(),
 		...properties,
 	});

@@ -1,29 +1,20 @@
-import { compare } from "uint8array-tools";
 import { spawnIntegrationBootstrapSockets } from "./spawnIntegrationBootstrapSockets";
-import { INTEGRATION_TEST_TIMEOUT_MS } from "./spawnIntegrationSocket";
+import { INTEGRATION_TEST_TIMEOUT_MS } from "./spawnIntegrationSockets";
 
 it(
 	"spawns integration bootstraps nodes",
 	async () => {
-		const bootstrapSockets = await spawnIntegrationBootstrapSockets();
-
-		try {
+		await spawnIntegrationBootstrapSockets(undefined, async (bootstrapSockets) => {
 			for (const socketA of bootstrapSockets) {
-				expect(socketA.node.endpoints.length).toBe(1);
+				expect(socketA.session.endpoint).toBeDefined();
 
 				for (const socketB of bootstrapSockets) {
-					if (compare(socketA.node.diceAddress, socketB.node.diceAddress) === 0) continue;
+					if (socketA.session.endpoint?.key === socketB.session.endpoint?.key) continue;
 
-					expect(socketA.overlay.table.has(socketA.overlay.table.getId(socketB.node))).toBe(true);
+					expect(socketA.session.cache.pool.has(socketB.session.endpoint!.address.key)).toBe(true);
 				}
 			}
-		} finally {
-			for (const socket of bootstrapSockets) {
-				socket.close();
-
-				for (const udpSocket of socket.options.udpSockets) udpSocket.close();
-			}
-		}
+		});
 	},
 	INTEGRATION_TEST_TIMEOUT_MS
 );

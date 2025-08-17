@@ -1,6 +1,6 @@
 {
 	"name": "@xkore/dice",
-	"version": "0.0.26",
+	"version": "0.1.0",
 	"description": "Distributed Interactive Connectivity Establishment",
 	"main": "./dist/index.js",
 	"module": "./dist/index.mjs",
@@ -22,7 +22,6 @@
 		"build": "tsup src/index.ts --tsconfig tsconfig.build.json --format esm,cjs --dts --treeshake"
 	},
 	"dependencies": {
-		"@noble/curves": "^1.8.1",
 		"@noble/hashes": "^1.7.1",
 		"@scure/base": "^1.2.4",
 		"@technically/lodash": "^4.17.0",
@@ -30,7 +29,6 @@
 		"bufferfy": "^3.0.5",
 		"events": "^3.3.0",
 		"ipaddr.js": "^2.2.0",
-		"kademlia-table": "^2.0.5",
 		"uint8array-tools": "^0.0.9"
 	},
 	"devDependencies": {
@@ -45,7 +43,6 @@
 		"ts-node": "^10.9.2",
 		"tslib": "^2.6.3",
 		"tsup": "^8.1.0",
-		"type-fest": "^4.37.0",
 		"typescript": "^5.5.2"
 	}
 }

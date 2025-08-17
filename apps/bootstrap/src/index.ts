@@ -1,112 +1,114 @@
-import { base32crockford, base64 } from "@scure/base";
-import { IpFamily, Nat, Nat1Endpoint, NetworkAddress, Socket } from "@xkore/dice";
-import { createSocket } from "dgram";
-import "dotenv/config";
-import log, { LogLevelNumbers } from "loglevel";
+import { Address, Nat, Nat1Endpoint, Socket } from "@xkore/dice";
+import { program } from "commander";
+import { createSocket, Socket as UdpSocket } from "dgram";
+import dotenv from "dotenv";
+import logger, { LogLevelNumbers } from "loglevel";
+import { CommandOptions } from "./methods/CommandOptions";
+import { optionalTransform } from "./methods/optionalTransform";
 
 const crypto = require("crypto").webcrypto;
 global.crypto = crypto;
 
-log.setLevel(process.env.LOG_LEVEL ? (parseInt(process.env.LOG_LEVEL) as LogLevelNumbers) : 1);
+dotenv.config();
 
-if (!process.env.PRIVATE_KEYS) throw new Error("Private keys not configured");
+type Options = CommandOptions<never, "cacheSize" | "concurrency" | "depth" | "ipv4" | "ipv6" | "logLevel" | "poolSize" | "ports">;
 
-const privateKeys = process.env.PRIVATE_KEYS.split(",").map((privateKey) => base64.decode(privateKey));
-
-if (!privateKeys.length) throw new Error("Invalid private keys count");
-if (!process.env.ADDRESSES) throw new Error("Addresses not configured");
-
-const addresses = process.env.ADDRESSES.split(",");
-
-if (addresses.length !== privateKeys.length) throw new Error("Invalid addresses count");
-if (!process.env.PORTS) throw new Error("Ports not configured");
-
-const ports = process.env.PORTS.split(",").map((port) => parseInt(port));
-
-if (ports.length !== privateKeys.length) throw new Error("Invalid ports count");
-
-const configurations: Array<{ privateKey: Uint8Array; address: string; port: number }> = [];
+program
+	.version("0.0.0", "-v, --vers", "output the current version")
+	.option("-s, --cache-size <number>", "Size in bytes of cache")
+	.option("-c, --concurrency <number>", "Concurrency of sample and relay operations")
+	.option("-d, --depth <number>", "Depth of sample operations")
+	.option("-4, --ipv4 <string>", "Ipv4 address")
+	.option("-6, --ipv6 <string>", "Ipv6 address")
+	.option("-l, --log-level <number>", "Log level 0-5, 0 being all logs")
+	.option("-o, --pool-size <number>", "Count of addresses cached in pool")
+	.option("-p, --ports <string>", "Comma separated list of ports");
 
 const main = async () => {
-	for (let i = 0; i < privateKeys.length; i++) {
-		const privateKey = privateKeys[i];
-		const address = addresses[i];
-		const port = ports[i];
+	const options = program.parse().opts<Options>();
 
-		if (!privateKey || !address || !port) throw new Error("Invalid configuration");
+	const cacheSize = optionalTransform(options.cacheSize || process.env.CACHE_SIZE, (value) => parseInt(value)) || 10_000;
+	const concurrency = optionalTransform(options.concurrency || process.env.CONCURRENCY, (value) => parseInt(value)) || 3;
+	const depth = optionalTransform(options.depth || process.env.DEPTH, (value) => parseInt(value)) || 10;
+	const ipv4 = optionalTransform(options.ipv4 || process.env.IPV4, (value) => value);
+	const ipv6 = optionalTransform(options.ipv6 || process.env.IPV6, (value) => value);
+	const logLevel = optionalTransform(options.logLevel || process.env.LOG_LEVEL, (value) => parseInt(value) as LogLevelNumbers) || 5;
+	const poolSize = optionalTransform(options.poolSize || process.env.POOL_SIZE, (value) => parseInt(value)) || 100;
+	const ports = optionalTransform(options.ports || process.env.PORTS, (value) => value.split(",").map((port) => parseInt(port))) || [5173];
 
-		configurations.push({
-			address,
-			port,
-			privateKey,
-		});
+	logger.setLevel(logLevel);
+	logger.info(
+		`[MAIN] Configuration:\n${JSON.stringify(
+			{
+				cacheSize,
+				concurrency,
+				depth,
+				ipv4,
+				ipv6,
+				logLevel,
+				poolSize,
+				ports,
+			},
+			null,
+			4
+		)}`
+	);
+
+	const udpSockets: Array<UdpSocket> = [];
+
+	if (ipv4) {
+		for (const port of ports) {
+			const udpSocket = createSocket("udp4");
+
+			await new Promise<void>((resolve) => {
+				udpSocket.bind(port, ipv4, () => resolve());
+			});
+
+			udpSockets.push(udpSocket);
+		}
+	} else if (ipv6) {
+		for (const port of ports) {
+			const udpSocket = createSocket("udp6");
+
+			await new Promise<void>((resolve) => {
+				udpSocket.bind(port, ipv6, () => resolve());
+			});
+
+			udpSockets.push(udpSocket);
+		}
 	}
 
 	const sockets: Array<Socket> = [];
 
-	for (const configuration of configurations) {
-		// const keys = new Keys(configuration);
-
-		const generation = 0; // getGeneration(keys.publicKey);
-
-		const udpSocket = createSocket("udp4");
-
-		await new Promise<void>((resolve) => {
-			udpSocket.bind(configuration.port, configuration.address, () => resolve());
-		});
-
+	for (const udpSocket of udpSockets) {
 		const socket = new Socket({
-			bootstrapNodes: [],
-			generation,
-			// logger: log,
+			bootstrapAddresses: [],
+			cacheSize,
+			concurrency,
+			depth,
+			logger,
+			poolSize,
 			natType: Nat.NAT1,
-			privateKey: configuration.privateKey,
-			udpSockets: [udpSocket],
+			udpSocket,
 		});
 
-		const endpoint = new Nat1Endpoint({
-			networkAddress: new NetworkAddress({
-				family: IpFamily.IPv4,
-				address: configuration.address,
-				port: configuration.port,
-			}),
+		socket.session.endpoint = new Nat1Endpoint({
+			address: Address.fromRemoteInfo(udpSocket.address()),
 		});
-
-		socket.externalUdpSocketMap.set(endpoint.key, udpSocket);
-		socket.internalEndpointMap.set(NetworkAddress.fromRemoteInfo(udpSocket.address()).toString(), endpoint);
-		socket.node = socket.node.update(
-			{
-				endpoints: [endpoint],
-			},
-			socket.keys
-		);
 
 		sockets.push(socket);
 	}
 
 	for (const socketA of sockets) {
 		for (const socketB of sockets) {
-			socketA.overlay.put(socketB.node);
+			socketA.session.cache.pool.set(socketB.session.endpoint!.address.key, socketB.session.endpoint!.address);
 		}
-
-		socketA.open(false);
 	}
 
-	for (let i = 0; i < sockets.length; i++) {
-		const socket = sockets[i]!;
+	await Promise.all(sockets.map((socket) => socket.open(false)));
 
-		log.info(`Bootstrap Node ${i}`);
-		log.debug(`Private Key: ${base64.encode(socket.options.privateKey)}`);
-		log.info(`Dice Address: ${base32crockford.encode(socket.keys.diceAddress)}`);
-		log.info(`Sequence Number: ${socket.node.sequenceNumber}`);
-		log.info(`Generation: ${socket.node.generation}`);
-		log.info(`Recovery Bit: ${socket.node.rSignature.recoveryBit}`);
-		log.info(`Signature: ${base64.encode(socket.node.rSignature.signature)}`);
-		log.debug("Endpoints:");
-		for (const endpoint of socket.node.endpoints) {
-			log.info(`	Network Address: ${endpoint.networkAddress.toString()}`);
-		}
-		log.info("");
+	for (const socket of sockets) {
+		logger.info(`[MAIN]: ${socket.session.endpoint!.address.toString()}`);
 	}
 };
 

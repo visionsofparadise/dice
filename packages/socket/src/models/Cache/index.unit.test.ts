@@ -2,11 +2,11 @@ import { setTimeout } from "timers/promises";
 import { Cache } from ".";
 
 it("sets and gets a valid value", () => {
-	const cache = new Cache<undefined>(500, 1000);
+	const cache = new Cache<string>(500, 1000);
 
 	const key = "test";
 
-	cache.set(key, undefined);
+	cache.set(key, "test");
 
 	const value = cache.get(key);
 

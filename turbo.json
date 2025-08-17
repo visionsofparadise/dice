@@ -22,6 +22,11 @@
       "inputs": ["src/**", "./tsconfig.json", "./package.json"],
       "outputs": ["dist/**"]
     },
+    "build-docker": {
+      "dependsOn": ["build"],
+      "inputs": ["dist/**"],
+      "outputs": []
+    },
     "unit": {
       "dependsOn": ["check"]
     },
@@ -31,8 +36,14 @@
     "start": {
       "dependsOn": ["build"]
     },
+    "start-docker": {
+      "dependsOn": ["build-docker"]
+    },
     "publish": {
       "dependsOn": ["unit", "build"]
+    },
+    "publish-docker": {
+      "dependsOn": ["unit", "build-docker"]
     }
   }
 }
