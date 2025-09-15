@@ -1,9 +1,9 @@
 import { defaults } from "@technically/lodash";
 import { Client } from "..";
-import { createId } from "../../../utilities/Id";
 import { Address } from "../../Address";
 import { Message } from "../../Message";
 import { MessageBodyType, PingBody } from "../../Message/BodyCodec";
+import { createTransactionId } from "../../TransactionId/Codec";
 import { AwaitClientResponseOptions } from "./awaitResponse";
 import { SendClientAddressOptions } from "./sendAddress";
 
@@ -11,7 +11,7 @@ export const sendClientPing = async (client: Client, address: Address, body?: Pa
 	const request = new Message({
 		body: {
 			type: MessageBodyType.PING,
-			transactionId: createId(),
+			transactionId: createTransactionId(),
 			...body,
 		},
 	});
@@ -27,6 +27,7 @@ export const sendClientPing = async (client: Client, address: Address, body?: Pa
 				},
 				body: {
 					type: MessageBodyType.PING_RESPONSE,
+					transactionId: request.body.transactionId,
 				},
 			},
 			defaults({ ...options, sendAbortController: abortController }, client.options)

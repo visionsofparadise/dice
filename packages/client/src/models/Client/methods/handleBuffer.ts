@@ -1,12 +1,19 @@
+import { compare } from "uint8array-tools";
 import { Client } from "..";
+import { MAGIC_BYTES } from "../../../utilities/magicBytes";
 import { RequiredProperties } from "../../../utilities/RequiredProperties";
 import { Address } from "../../Address";
-import { MessageBodyCodec } from "../../Message/BodyCodec";
-import { MessageCodec } from "../../Message/Codec";
+import { MessageCodec, VERSION } from "../../Message/Codec";
 
 export const handleClientBuffer = async (client: Client, buffer: Uint8Array, context: RequiredProperties<Client.Context, "remoteInfo">) => {
 	try {
-		if (buffer[0] === undefined || buffer[0] >= MessageBodyCodec.codecs.length) return;
+		if (client.state !== Client.STATE.OPENED) return;
+
+		if (compare(buffer.subarray(0, MAGIC_BYTES.byteLength), MAGIC_BYTES) !== 0) return;
+
+		const version = buffer.at(MAGIC_BYTES.byteLength);
+
+		if (version === undefined || version > VERSION.V0) return;
 
 		client.logger?.debug(`Recevied ${buffer.byteLength} bytes`);
 
@@ -16,8 +23,8 @@ export const handleClientBuffer = async (client: Client, buffer: Uint8Array, con
 		client.events.emit("message", message, {
 			...context,
 			buffer,
+			client,
 			remoteAddress,
-			session: client,
 		});
 	} catch (error) {
 		client.events.emit("error", error);

@@ -13,9 +13,9 @@ export const sendClientAddress = async (client: Client, address: Address, buffer
 	if (address.key === client.endpoint.address?.key) {
 		await client.handleBuffer(buffer, {
 			buffer,
+			client,
 			remoteAddress: client.endpoint.address,
 			remoteInfo: client.endpoint.address.toRemoteInfo(buffer.byteLength),
-			session: client,
 		});
 
 		return;
@@ -49,7 +49,7 @@ export const sendClientAddress = async (client: Client, address: Address, buffer
 
 			options.signal?.addEventListener("abort", listener);
 
-			setTimeout(() => resolve(), 100 * 2 ** attempts);
+			setTimeout(() => resolve(), 250 * 2 ** attempts);
 		});
 	}
 };

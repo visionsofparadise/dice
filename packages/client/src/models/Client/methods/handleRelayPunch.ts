@@ -6,6 +6,7 @@ export const handleClientRelayPunch = async (client: Client, request: Message<Me
 	const nextRequest = new Message({
 		body: {
 			type: MessageBodyType.PUNCH,
+			transactionId: request.body.transactionId,
 			sourceAddress: context.remoteAddress,
 		},
 	});

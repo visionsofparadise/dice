@@ -1,3 +1,4 @@
+import { hex } from "@scure/base";
 import { Client } from "..";
 import { DiceError } from "../../Error";
 import { Message } from "../../Message";
@@ -17,6 +18,7 @@ export interface ResponseBodyAssertions<T extends MessageBodyType> {
 	};
 	body: {
 		type: T;
+		transactionId: Uint8Array;
 	};
 }
 
@@ -29,6 +31,7 @@ export const awaitClientResponse = async <T extends MessageBodyType = MessageBod
 		if (options?.signal?.aborted) return reject(new DiceError("Awaiting response aborted"));
 
 		const internalAbort = new AbortController();
+		const key = assertions.source.address.key + assertions.body.type + hex.encode(assertions.body.transactionId);
 
 		let abortListener: (() => void) | undefined;
 		let responseListener: ((message: Message, context: Client.Context) => void) | undefined;
@@ -40,7 +43,7 @@ export const awaitClientResponse = async <T extends MessageBodyType = MessageBod
 				options?.signal?.removeEventListener("abort", abortListener);
 				internalAbort.signal.removeEventListener("abort", abortListener);
 			}
-			if (responseListener) client.responseListenerMap.delete(assertions.source.address.key + assertions.body.type);
+			if (responseListener) client.responseListenerMap.delete(key);
 			if (timeout) clearTimeout(timeout);
 		};
 
@@ -58,7 +61,7 @@ export const awaitClientResponse = async <T extends MessageBodyType = MessageBod
 			resolve(response as Message<T>);
 		};
 
-		client.responseListenerMap.set(assertions.source.address.key + assertions.body.type, {
+		client.responseListenerMap.set(key, {
 			abort: internalAbort,
 			listener: responseListener,
 		});

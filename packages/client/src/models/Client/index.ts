@@ -56,9 +56,9 @@ export namespace Client {
 
 	export interface Context {
 		buffer: Uint8Array;
+		client: Client;
 		remoteInfo: RemoteInfo;
 		remoteAddress: Address;
-		session: Client;
 	}
 
 	export type Socket = Pick<UdpSocket, "address" | "close" | "on" | "removeListener" | "send" | "unref">;

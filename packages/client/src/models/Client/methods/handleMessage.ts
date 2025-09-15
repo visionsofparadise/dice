@@ -1,3 +1,4 @@
+import { hex } from "@scure/base";
 import { Client } from "..";
 import { Message } from "../../Message";
 import { MessageBodyType } from "../../Message/BodyCodec";
@@ -10,7 +11,7 @@ export const handleClientMessage = async (client: Client, message: Message, cont
 			case MessageBodyType.NOOP:
 				break;
 			case MessageBodyType.PING: {
-				client.handlePing(context);
+				client.handlePing(message as Message<MessageBodyType.PING>, context);
 
 				break;
 			}
@@ -25,12 +26,12 @@ export const handleClientMessage = async (client: Client, message: Message, cont
 				break;
 			}
 			case MessageBodyType.LIST: {
-				client.handleList(context);
+				client.handleList(message as Message<MessageBodyType.LIST>, context);
 
 				break;
 			}
 			default: {
-				const responseListener = client.responseListenerMap.get(context.remoteAddress.key + message.body.type)?.listener;
+				const responseListener = client.responseListenerMap.get(context.remoteAddress.key + message.body.type + hex.encode(message.body.transactionId))?.listener;
 
 				if (responseListener) responseListener(message, context);
 

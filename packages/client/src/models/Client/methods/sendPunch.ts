@@ -4,6 +4,7 @@ import { Endpoint } from "../../Endpoint";
 import { DiceError } from "../../Error";
 import { Message } from "../../Message";
 import { MessageBodyType, RelayPunchBody } from "../../Message/BodyCodec";
+import { createTransactionId } from "../../TransactionId/Codec";
 import { AwaitClientResponseOptions } from "./awaitResponse";
 import { SendClientAddressOptions } from "./sendAddress";
 
@@ -19,6 +20,7 @@ export const sendClientPunch = async (client: Client, endpoint: Endpoint, body?:
 	const request = new Message({
 		body: {
 			type: MessageBodyType.RELAY_PUNCH,
+			transactionId: createTransactionId(),
 			targetAddress: endpoint.address,
 			...body,
 		},
@@ -39,6 +41,7 @@ export const sendClientPunch = async (client: Client, endpoint: Endpoint, body?:
 				},
 				body: {
 					type: MessageBodyType.PUNCH_RESPONSE,
+					transactionId: request.body.transactionId,
 				},
 			},
 			defaults({ ...options, sendAbortController: abortController }, client.options)

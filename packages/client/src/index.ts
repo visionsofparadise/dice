@@ -31,7 +31,9 @@ export {
 	type RelayPunchBody,
 } from "./models/Message/BodyCodec";
 export { MessageCodec } from "./models/Message/Codec";
+export { createTransactionId, TransactionIdCodec } from "./models/TransactionId/Codec";
 export { BOOTSTRAP_ADDRESSES } from "./utilities/bootstrapAddresses";
-export { createId, IdCodec } from "./utilities/Id";
 export { wrapLogger, type Logger } from "./utilities/Logger";
 export { type OptionalProperties, type RequiredProperties } from "./utilities/RequiredProperties";
+export { spawnIntegrationBootstrapClients } from "./utilities/spawnIntegrationBootstrapClients";
+export { spawnIntegrationClients } from "./utilities/spawnIntegrationClients";

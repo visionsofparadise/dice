@@ -10,6 +10,7 @@ export const handleClientPunch = async (client: Client, request: Message<Message
 	const response = new Message({
 		body: {
 			type: MessageBodyType.PUNCH_RESPONSE,
+			transactionId: request.body.transactionId,
 		},
 	});
 

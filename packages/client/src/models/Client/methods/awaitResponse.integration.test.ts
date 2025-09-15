@@ -1,6 +1,7 @@
 import { INTEGRATION_TEST_TIMEOUT_MS, spawnIntegrationClients } from "../../../utilities/spawnIntegrationClients";
 import { Message } from "../../Message";
 import { MessageBodyType } from "../../Message/BodyCodec";
+import { createTransactionId } from "../../TransactionId/Codec";
 
 it(
 	"awaits response",
@@ -9,6 +10,7 @@ it(
 			const response = new Message({
 				body: {
 					type: MessageBodyType.PING_RESPONSE,
+					transactionId: createTransactionId(),
 					reflectionAddress: clientB.endpoint.address!,
 				},
 			});
@@ -21,6 +23,7 @@ it(
 				},
 				body: {
 					type: MessageBodyType.PING_RESPONSE,
+					transactionId: response.body.transactionId,
 				},
 			});
 

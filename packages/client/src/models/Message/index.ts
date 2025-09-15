@@ -1,6 +1,7 @@
+import { MAGIC_BYTES } from "../../utilities/magicBytes";
 import { RequiredProperties } from "../../utilities/RequiredProperties";
 import { MessageBodyMap, MessageBodyType } from "./BodyCodec";
-import { MessageCodec, MessageProperties } from "./Codec";
+import { MessageCodec, MessageProperties, VERSION } from "./Codec";
 import { mockMessage } from "./methods/mock";
 
 export namespace Message {
@@ -20,6 +21,8 @@ export namespace Message {
 export class Message<T extends MessageBodyType = MessageBodyType> implements Message.Properties<T> {
 	static mock = mockMessage;
 
+	readonly magicBytes = MAGIC_BYTES;
+	readonly version = VERSION.V0;
 	readonly body: MessageBodyMap[T];
 
 	constructor(
@@ -38,8 +41,8 @@ export class Message<T extends MessageBodyType = MessageBodyType> implements Mes
 	}
 
 	get properties(): Message.Properties<T> {
-		const { body } = this;
+		const { magicBytes, version, body } = this;
 
-		return { body };
+		return { magicBytes, version, body };
 	}
 }
