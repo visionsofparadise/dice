@@ -1,0 +1,48 @@
+{
+	"name": "@xkore/dice",
+	"version": "0.2.0",
+	"description": "Distributed Interactive Connectivity Establishment",
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist/**"
+	],
+	"sideEffects": false,
+	"keywords": [],
+	"author": "Matt Cavender",
+	"license": "ISC",
+	"scripts": {
+		"check": "tsc --noEmit",
+		"unit": "jest unit",
+		"integration": "jest integration --runInBand",
+		"build": "tsup src/index.ts --tsconfig tsconfig.build.json --format esm,cjs --dts --treeshake"
+	},
+	"dependencies": {
+		"@noble/hashes": "^1.7.1",
+		"@scure/base": "^1.2.4",
+		"@technically/lodash": "^4.17.0",
+		"@types/events": "^3.0.3",
+		"bufferfy": "^3.0.5",
+		"events": "^3.3.0",
+		"ipaddr.js": "^2.2.0",
+		"uint8array-tools": "^0.0.9"
+	},
+	"devDependencies": {
+		"@dice/tsconfig": "*",
+		"@jest/globals": "^29.7.0",
+		"@types/jest": "^28.1.6",
+		"@types/node": "^22.7.4",
+		"jest": "^29.4.3",
+		"loglevel": "^1.9.2",
+		"source-map-support": "^0.5.21",
+		"ts-jest": "^29.1.4",
+		"ts-node": "^10.9.2",
+		"tslib": "^2.6.3",
+		"tsup": "^8.1.0",
+		"typescript": "^5.5.2"
+	}
+}
