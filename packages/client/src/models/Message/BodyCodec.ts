@@ -1,16 +1,18 @@
 import { Codec } from "bufferfy";
 import { AddressCodec } from "../Address/Codec";
+import { Ipv4AddressCodec } from "../Ipv4Address/Codec";
+import { Ipv6AddressCodec } from "../Ipv6Address/Codec";
 import { TransactionIdCodec } from "../TransactionId/Codec";
 
 export enum MessageBodyType {
 	NOOP,
 	PING,
-	PING_RESPONSE,
-	RELAY_PUNCH,
-	PUNCH,
-	PUNCH_RESPONSE,
+	PONG,
+	RELAY_BIND_REQUEST,
+	BIND_REQUEST,
+	BIND,
 	LIST,
-	LIST_RESPONSE,
+	ADDRESSES,
 }
 
 export const NoopBodyCodec = Codec.Object({
@@ -26,36 +28,36 @@ export const PingBodyCodec = Codec.Object({
 
 export interface PingBody extends Codec.Type<typeof PingBodyCodec> {}
 
-export const PingResponseBodyCodec = Codec.Object({
-	type: Codec.Constant(MessageBodyType.PING_RESPONSE),
+export const PongBodyCodec = Codec.Object({
+	type: Codec.Constant(MessageBodyType.PONG),
 	transactionId: TransactionIdCodec,
 	reflectionAddress: AddressCodec,
 });
 
-export interface PingResponseBody extends Codec.Type<typeof PingResponseBodyCodec> {}
+export interface PongBody extends Codec.Type<typeof PongBodyCodec> {}
 
-export const RelayPunchBodyCodec = Codec.Object({
-	type: Codec.Constant(MessageBodyType.RELAY_PUNCH),
+export const RelayBindRequestBodyCodec = Codec.Object({
+	type: Codec.Constant(MessageBodyType.RELAY_BIND_REQUEST),
 	transactionId: TransactionIdCodec,
 	targetAddress: AddressCodec,
 });
 
-export interface RelayPunchBody extends Codec.Type<typeof RelayPunchBodyCodec> {}
+export interface RelayBindRequestBody extends Codec.Type<typeof RelayBindRequestBodyCodec> {}
 
-export const PunchBodyCodec = Codec.Object({
-	type: Codec.Constant(MessageBodyType.PUNCH),
+export const BindRequestBodyCodec = Codec.Object({
+	type: Codec.Constant(MessageBodyType.BIND_REQUEST),
 	transactionId: TransactionIdCodec,
 	sourceAddress: AddressCodec,
 });
 
-export interface PunchBody extends Codec.Type<typeof PunchBodyCodec> {}
+export interface BindRequestBody extends Codec.Type<typeof BindRequestBodyCodec> {}
 
-export const PunchResponseBodyCodec = Codec.Object({
-	type: Codec.Constant(MessageBodyType.PUNCH_RESPONSE),
+export const BindBodyCodec = Codec.Object({
+	type: Codec.Constant(MessageBodyType.BIND),
 	transactionId: TransactionIdCodec,
 });
 
-export interface PunchResponseBody extends Codec.Type<typeof PunchResponseBodyCodec> {}
+export interface BindBody extends Codec.Type<typeof BindBodyCodec> {}
 
 export const ListBodyCodec = Codec.Object({
 	type: Codec.Constant(MessageBodyType.LIST),
@@ -64,16 +66,16 @@ export const ListBodyCodec = Codec.Object({
 
 export interface ListBody extends Codec.Type<typeof ListBodyCodec> {}
 
-export const ListResponseBodyCodec = Codec.Object({
-	type: Codec.Constant(MessageBodyType.LIST_RESPONSE),
+export const AddressesBodyCodec = Codec.Object({
+	type: Codec.Constant(MessageBodyType.ADDRESSES),
 	transactionId: TransactionIdCodec,
-	addresses: Codec.Array(AddressCodec, Codec.UInt(8)),
+	addresses: Codec.Union([Codec.Array(Ipv6AddressCodec, Codec.UInt(8)), Codec.Array(Ipv4AddressCodec, Codec.UInt(8))], Codec.UInt(8)),
 	reflectionAddress: AddressCodec,
 });
 
-export interface ListResponseBody extends Codec.Type<typeof ListResponseBodyCodec> {}
+export interface AddressesBody extends Codec.Type<typeof AddressesBodyCodec> {}
 
-export const MessageBodyCodec = Codec.Union([NoopBodyCodec, PingBodyCodec, PingResponseBodyCodec, RelayPunchBodyCodec, PunchBodyCodec, PunchResponseBodyCodec, ListBodyCodec, ListResponseBodyCodec]);
+export const MessageBodyCodec = Codec.Union([NoopBodyCodec, PingBodyCodec, PongBodyCodec, RelayBindRequestBodyCodec, BindRequestBodyCodec, BindBodyCodec, ListBodyCodec, AddressesBodyCodec]);
 
 export type MessageBody = Codec.Type<typeof MessageBodyCodec>;
 

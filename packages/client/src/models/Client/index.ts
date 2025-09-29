@@ -1,47 +1,30 @@
 import { defaults } from "@technically/lodash";
-import { RemoteInfo, Socket as UdpSocket } from "dgram";
 import EventEmitter from "events";
-import { BOOTSTRAP_ADDRESSES } from "../../utilities/bootstrapAddresses";
 import { Logger, wrapLogger } from "../../utilities/Logger";
 import { RequiredProperties } from "../../utilities/RequiredProperties";
-import { Address } from "../Address";
-import { Cache } from "../Cache";
-import { Endpoint } from "../Endpoint";
+import { AddressType } from "../Address/Type";
+import { DiceAddress } from "../DiceAddress";
 import { EventEmitterOptions } from "../EventEmitter";
-import { Message } from "../Message";
-import { MessageBodyType } from "../Message/BodyCodec";
-import { awaitClientResponse, AwaitClientResponseOptions, ResponseBodyAssertions } from "./methods/awaitResponse";
+import { Ipv4Address } from "../Ipv4Address";
+import { Ipv6Address } from "../Ipv6Address";
+import { Overlay } from "../Overlay";
+import { SendOverlayOptions } from "../Overlay/methods/send";
 import { closeClient } from "./methods/close";
-import { findClientAddresses } from "./methods/findAddresses";
-import { handleClientAddress } from "./methods/handleAddress";
-import { handleClientBuffer } from "./methods/handleBuffer";
-import { handleClientList } from "./methods/handleList";
-import { handleClientMessage } from "./methods/handleMessage";
-import { handleClientPing } from "./methods/handlePing";
-import { handleClientPunch } from "./methods/handlePunch";
-import { handleClientReflection } from "./methods/handleReflection";
-import { handleClientRelayPunch } from "./methods/handleRelayPunch";
-import { healthcheckClient } from "./methods/healthcheck";
-import { isValidClientAddress } from "./methods/isValidAddress";
 import { openClient } from "./methods/open";
-import { sendClientAddress, SendClientAddressOptions } from "./methods/sendAddress";
-import { sendClientEndpoint } from "./methods/sendEndpoint";
-import { sendClientList } from "./methods/sendList";
-import { sendClientNoop } from "./methods/sendNoop";
-import { sendClientPing } from "./methods/sendPing";
-import { sendClientPunch } from "./methods/sendPunch";
+import { requestClientBind } from "./methods/requestBind";
+import { sendClient } from "./methods/send";
 
 export namespace Client {
 	export interface EventMap {
 		close: [];
-		endpoint: [previousEndpoint: Endpoint, nextEndpoint: Endpoint];
+		diceAddress: [diceAddress: DiceAddress];
 		error: [error: unknown];
-		message: [message: Message, context: Client.Context];
 		open: [];
 	}
 
-	export interface Options extends AwaitClientResponseOptions, SendClientAddressOptions, EventEmitterOptions {
-		bootstrapAddresses: Array<Address>;
+	export interface Options extends SendOverlayOptions, EventEmitterOptions {
+		[AddressType.IPv6]?: RequiredProperties<Overlay.Options, "socket">;
+		[AddressType.IPv4]?: RequiredProperties<Overlay.Options, "socket">;
 		cacheSize: number;
 		concurrency: number;
 		depth: {
@@ -51,45 +34,58 @@ export namespace Client {
 		healthcheckIntervalMs: number;
 		logger?: Logger;
 		relayCount: number;
-		socket: Client.Socket;
 	}
-
-	export interface Context {
-		buffer: Uint8Array;
-		client: Client;
-		remoteInfo: RemoteInfo;
-		remoteAddress: Address;
-	}
-
-	export type Socket = Pick<UdpSocket, "address" | "close" | "on" | "removeListener" | "send" | "unref">;
 
 	export type State = 0 | 1;
 }
 
+/**
+ * DICE Client for peer-to-peer networking without infrastructure dependencies.
+ *
+ * Manages dual-stack IPv4/IPv6 overlays and provides a high-level interface for:
+ * - Generating your own DICE addresses
+ * - Sending messages to others' DICE addresses
+ * - Automatic NAT traversal and connectivity handling
+ *
+ * @example
+ * ```typescript
+ * const client = new Client({
+ *   [AddressType.IPv4]: { socket: ipv4Socket },
+ *   [AddressType.IPv6]: { socket: ipv6Socket }
+ * });
+ *
+ * await client.open();
+ * console.log("My address:", client.diceAddress.toString());
+ *
+ * client.on("diceaddress", (diceaddress) => {
+ *   console.log(diceAddress.toString());
+ * });
+ *
+ * await client.send(targetAddress, messageBuffer);
+ * ```
+ */
 export class Client {
 	static STATE = {
 		CLOSED: 0,
 		OPENED: 1,
 	} as const;
 
-	public cache: { punchIn: Cache; punchOut: Cache };
 	public events: EventEmitter<Client.EventMap>;
-	public healthcheckInterval?: NodeJS.Timeout;
-	public isHealthchecking = false;
-	public localAddress: Address;
 	public logger?: Logger;
 	public options: Client.Options;
-	public reflection?: {
-		prefixes: Set<string>;
-		address: Address;
+	public overlays: {
+		[AddressType.IPv6]?: Overlay;
+		[AddressType.IPv4]?: Overlay;
 	};
-	public responseListenerMap = new Map<string, { abort: AbortController; listener: (message: Message, context: Client.Context) => any }>();
-	public socket: Client.Socket;
 	public state: Client.State = Client.STATE.CLOSED;
 
-	constructor(options: RequiredProperties<Client.Options, "socket">) {
+	/**
+	 * Creates a new DICE client.
+	 *
+	 * @param options - Configuration including sockets and networking parameters
+	 */
+	constructor(options?: Partial<Client.Options>) {
 		const defaultOptions = defaults(options, {
-			bootstrapAddresses: BOOTSTRAP_ADDRESSES,
 			cacheSize: 10_000,
 			concurrency: 3,
 			depth: {
@@ -100,74 +96,122 @@ export class Client {
 			relayCount: 9,
 		});
 
-		this.cache = {
-			punchIn: new Cache(60_000, defaultOptions.cacheSize),
-			punchOut: new Cache(30_000, defaultOptions.cacheSize),
-		};
 		this.events = new EventEmitter(defaultOptions);
-		this.localAddress = Address.fromRemoteInfo(defaultOptions.socket.address());
-		this.logger = wrapLogger(defaultOptions.logger, `DICE SESSION ${this.localAddress.toString()}`);
+		this.logger = wrapLogger(defaultOptions.logger, "DICE");
 		this.options = defaultOptions;
-		this.socket = defaultOptions.socket;
+		this.overlays = {
+			[AddressType.IPv6]: defaultOptions[AddressType.IPv6]
+				? new Overlay({
+						...defaultOptions,
+						...defaultOptions[AddressType.IPv6],
+					})
+				: undefined,
+			[AddressType.IPv4]: defaultOptions[AddressType.IPv4]
+				? new Overlay({
+						...defaultOptions,
+						...defaultOptions[AddressType.IPv4],
+					})
+				: undefined,
+		};
 	}
 
-	awaitResponse = async <T extends MessageBodyType = MessageBodyType>(assertions: ResponseBodyAssertions<T>, options?: AwaitClientResponseOptions): Promise<Message<T>> => {
-		return awaitClientResponse(this, assertions, options);
-	};
-
+	/**
+	 * Closes the DICE client and all underlying network connections.
+	 *
+	 * Gracefully shuts down both IPv4 and IPv6 overlays, stops healthcheck timers,
+	 * and emits the 'close' event when complete.
+	 */
 	close = closeClient.bind(this, this);
-	healthcheck = healthcheckClient.bind(this, this);
+
+	/**
+	 * Opens the DICE client and begins peer discovery.
+	 *
+	 * Initializes both IPv4 and IPv6 overlays, begins healthcheck cycles,
+	 * and starts discovering coordinators from bootstrap peers.
+	 * Emits 'open' event when ready to send/receive messages.
+	 *
+	 * @param isBootstrapping - Whether to bootstrap (default: true)
+	 * @returns Promise that resolves when client is fully operational
+	 */
 	open = openClient.bind(this, this);
 
-	findAddresses = findClientAddresses.bind(this, this);
-	isValidAddress = isValidClientAddress.bind(this, this);
-	sendAddress = sendClientAddress.bind(this, this);
-	sendEndpoint = sendClientEndpoint.bind(this, this);
+	/**
+	 * Requests NAT traversal coordination for a target endpoint.
+	 *
+	 * Used internally when sending to peers behind NATs. Coordinates with
+	 * the target's coordinator peers to establish direct connectivity.
+	 *
+	 * @param diceAddress - Target DICE address with coordinator information
+	 * @param addressType - Optional: force IPv4 or IPv6
+	 * @returns Promise that resolves when coordination is complete
+	 * @throws {DiceError} When unable to request bind (no coordinators or overlays)
+	 */
+	requestBind = requestClientBind.bind(this, this);
 
-	handleAddress = handleClientAddress.bind(this, this);
-	handleBuffer = handleClientBuffer.bind(this, this);
-	handleList = handleClientList.bind(this, this);
-	handleMessage = handleClientMessage.bind(this, this);
-	handlePing = handleClientPing.bind(this, this);
-	handlePunch = handleClientPunch.bind(this, this);
-	handleReflection = handleClientReflection.bind(this, this);
-	handleRelayPunch = handleClientRelayPunch.bind(this, this);
-
-	list = sendClientList.bind(this, this);
-	noop = sendClientNoop.bind(this, this);
-	ping = sendClientPing.bind(this, this);
-	punch = sendClientPunch.bind(this, this);
+	/**
+	 * Sends a message directly to another DICE address.
+	 *
+	 * Automatically handles NAT traversal if needed by coordinating with
+	 * coordinator peers embedded in the target address. Prefers IPv6, falls back to IPv4.
+	 *
+	 * @param diceAddress - Target DICE address to send to
+	 * @param buffer - Message data to send
+	 * @param addressType - Optional: force IPv4 or IPv6
+	 * @param options - Optional: timeout and retry configuration
+	 * @returns Promise that resolves when message is sent
+	 *
+	 * @example
+	 * ```typescript
+	 * const message = new TextEncoder().encode("Hello, peer!");
+	 *
+	 * await client.send(targetAddress, message);
+	 * ```
+	 */
+	send = sendClient.bind(this, this);
 
 	clientListeners = {
-		messageListener: (message: Message, context: Client.Context) => {
-			this.handleMessage(message, context);
-		},
 		errorListener: (error: unknown) => {
 			this.logger?.error(error);
 		},
 	};
 
-	socketListeners = {
-		messageListener: (message: Uint8Array, remoteInfo: RemoteInfo) => {
-			this.handleBuffer(message, {
-				remoteInfo,
-			});
+	overlayListeners = {
+		addressListener: () => {
+			this.events.emit("diceAddress", this.diceAddress);
 		},
 	};
 
-	private _endpoint = new Endpoint();
+	/**
+	 * The current DICE address.
+	 *
+	 * The DICE address embeds connectivity information including external IP addresses
+	 * and coordinator lists for NAT traversal. This address can be shared with other
+	 * peers to enable direct messaging.
+	 *
+	 * Address format: `dice://[ipv6]:[port]/[coordinators]/[ipv4]:[port]/[coordinators]`
+	 *
+	 * @returns DiceAddress
+	 *
+	 */
+	get diceAddress(): DiceAddress {
+		const ipv6Overlay = this.overlays[AddressType.IPv6];
+		const ipv4Overlay = this.overlays[AddressType.IPv4];
 
-	get endpoint(): Endpoint {
-		return this._endpoint;
-	}
-
-	set endpoint(nextEndpoint: Endpoint) {
-		if (nextEndpoint.key !== this.endpoint.key) {
-			const previousEndpoint = this.endpoint;
-
-			this._endpoint = nextEndpoint;
-
-			this.events.emit("endpoint", previousEndpoint, nextEndpoint);
-		}
+		return new DiceAddress({
+			[AddressType.IPv6]:
+				ipv6Overlay?.external instanceof Ipv6Address
+					? {
+							address: ipv6Overlay.external,
+							coordinators: !ipv6Overlay.isReachable ? (ipv6Overlay.coordinators as Array<Ipv6Address>) : undefined,
+						}
+					: undefined,
+			[AddressType.IPv4]:
+				ipv4Overlay?.external instanceof Ipv4Address
+					? {
+							address: ipv4Overlay.external,
+							coordinators: !ipv6Overlay?.isReachable ? (ipv4Overlay.coordinators as Array<Ipv4Address>) : undefined,
+						}
+					: undefined,
+		});
 	}
 }

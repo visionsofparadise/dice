@@ -1,12 +1,16 @@
 export class Cache {
-	map = new Map<string | number, number>();
+	map = new Map<string, number>();
 
 	constructor(
 		public readonly ttl: number,
 		public readonly limit: number
 	) {}
 
-	*[Symbol.iterator](): IterableIterator<string | number> {
+	private combineKeys(keyA: string, keyB: string): string {
+		return `${keyA}-${keyB}`;
+	}
+
+	*[Symbol.iterator](): IterableIterator<string> {
 		const now = Date.now();
 
 		for (const [key, value] of this.map) {
@@ -20,7 +24,8 @@ export class Cache {
 		}
 	}
 
-	add(key: string | number, now = Date.now()): this {
+	add(keyA: string, keyB: string, now = Date.now()): this {
+		const key = this.combineKeys(keyA, keyB);
 		this.map.delete(key);
 		this.map.set(key, now);
 
@@ -45,13 +50,15 @@ export class Cache {
 		return this;
 	}
 
-	delete(key: string | number): void {
+	delete(keyA: string, keyB: string): void {
+		const key = this.combineKeys(keyA, keyB);
 		this.map.delete(key);
 
 		return;
 	}
 
-	has(key: string | number, now = Date.now()): boolean {
+	has(keyA: string, keyB: string, now = Date.now()): boolean {
+		const key = this.combineKeys(keyA, keyB);
 		const value = this.map.get(key);
 
 		if (!value) return false;

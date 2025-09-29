@@ -23,12 +23,16 @@ export class Message<T extends MessageBodyType = MessageBodyType> implements Mes
 
 	readonly magicBytes = MAGIC_BYTES;
 	readonly version = VERSION.V0;
+	readonly flags: {
+		isNotCandidate: boolean;
+	};
 	readonly body: MessageBodyMap[T];
 
 	constructor(
 		properties: RequiredProperties<Message.Properties<T>, "body">,
 		public readonly cache: Message.Cache = {}
 	) {
+		this.flags = properties.flags || { isNotCandidate: false };
 		this.body = properties.body;
 	}
 
@@ -41,8 +45,8 @@ export class Message<T extends MessageBodyType = MessageBodyType> implements Mes
 	}
 
 	get properties(): Message.Properties<T> {
-		const { magicBytes, version, body } = this;
+		const { magicBytes, version, flags, body } = this;
 
-		return { magicBytes, version, body };
+		return { magicBytes, version, flags, body };
 	}
 }

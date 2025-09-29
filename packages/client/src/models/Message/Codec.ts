@@ -10,6 +10,7 @@ export enum VERSION {
 export const MessagePropertiesCodec = Codec.Object({
 	magicBytes: Codec.Bytes(MAGIC_BYTES),
 	version: Codec.Enum([VERSION.V0], Codec.UInt(8)),
+	flags: Codec.BitField(["isNotCandidate"]),
 	body: MessageBodyCodec,
 });
 
@@ -17,6 +18,6 @@ export interface MessageProperties extends Codec.Type<typeof MessagePropertiesCo
 
 export const MessageCodec = Codec.Transform(MessagePropertiesCodec, {
 	isValid: (value) => value instanceof Message,
-	decode: (properties) => new Message(properties),
+	decode: (properties, buffer) => new Message(properties, { buffer, byteLength: buffer.byteLength }),
 	encode: (message) => message.properties,
 });

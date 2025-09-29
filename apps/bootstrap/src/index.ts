@@ -1,6 +1,6 @@
-import { Address, Client, Endpoint } from "@xkore/dice";
+import { AddressType, Client, Ipv4Address, Ipv6Address, Overlay } from "@xkore/dice";
 import { program } from "commander";
-import { createSocket, Socket } from "dgram";
+import { createSocket } from "dgram";
 import dotenv from "dotenv";
 import logger, { LogLevelNumbers } from "loglevel";
 import { CommandOptions } from "./methods/CommandOptions";
@@ -45,59 +45,70 @@ const main = async () => {
 		)}`
 	);
 
-	const sockets: Array<Socket> = [];
+	const socketPairs: Array<Partial<Record<AddressType, Overlay.Socket>>> = [];
 
-	if (ipv4) {
-		for (const port of ports) {
+	for (const port of ports) {
+		const socketPair: Partial<Record<AddressType, Overlay.Socket>> = {};
+
+		if (ipv4) {
 			const socket = createSocket("udp4");
 
 			await new Promise<void>((resolve) => {
 				socket.bind(port, ipv4, () => resolve());
 			});
 
-			sockets.push(socket);
+			socketPair[AddressType.IPv4] = socket;
 		}
-	} else if (ipv6) {
-		for (const port of ports) {
+
+		if (ipv6) {
 			const socket = createSocket("udp6");
 
 			await new Promise<void>((resolve) => {
 				socket.bind(port, ipv6, () => resolve());
 			});
 
-			sockets.push(socket);
+			socketPair[AddressType.IPv6] = socket;
 		}
+
+		socketPairs.push(socketPair);
 	}
 
 	const clients: Array<Client> = [];
 
-	for (const socket of sockets) {
+	for (const socketPair of socketPairs) {
 		const client = new Client({
-			bootstrapAddresses: [],
+			[AddressType.IPv6]: {
+				bootstrapAddresses: [],
+				isPrefixFilteringDisabled: true,
+				socket: socketPair[AddressType.IPv6],
+			},
+			[AddressType.IPv4]: {
+				bootstrapAddresses: [],
+				isPrefixFilteringDisabled: true,
+				socket: socketPair[AddressType.IPv4],
+			},
 			cacheSize,
 			logger,
-			socket,
 		});
 
-		client.endpoint = new Endpoint({
-			address: Address.fromRemoteInfo(socket.address()),
-		});
-
+		client.overlays[AddressType.IPv6]!.external = Ipv6Address.fromAddressInfo(socketPair[AddressType.IPv6].address());
+		client.overlays[AddressType.IPv4]!.external = Ipv4Address.fromAddressInfo(socketPair[AddressType.IPv4].address());
 		clients.push(client);
 	}
 
 	for (const clientA of clients) {
 		for (const clientB of clients) {
-			if (clientA.endpoint.address!.key === clientB.endpoint.address!.key) continue;
+			if (clientA.diceAddress.toString() === clientB.diceAddress.toString()) continue;
 
-			clientA.endpoint.relayAddresses.push(clientB.endpoint.address!);
+			clientA.overlays[AddressType.IPv6]?.coordinatorMap.set(clientB.overlays[AddressType.IPv6]?.external!.key!, clientB.overlays[AddressType.IPv6]?.external!);
+			clientA.overlays[AddressType.IPv4]?.coordinatorMap.set(clientB.overlays[AddressType.IPv4]?.external!.key!, clientB.overlays[AddressType.IPv4]?.external!);
 		}
 
 		await clientA.open(false);
 	}
 
 	for (const client of clients) {
-		logger.info(`[MAIN]: ${client.endpoint.address!.toString()}`);
+		logger.info(`[MAIN]: ${client.diceAddress.toString()}`);
 	}
 };
 
