@@ -17,7 +17,7 @@ It handles:
 - NAT/Firewall detection and traversal
 - UDP hole punching.
 
-DICE multiplexes on the same port your p2p application is running on, provides you with a publicly reachable DICE address, and facilitates sending to others' DICE addresses. With standard addresses around 20% of peers are publicly reachable, with DICE addresses this grows to around 80%.
+DICE multiplexes on the same port as your p2p application, provides you with a publicly reachable DICE address, and facilitates sending to others' DICE addresses. With standard addresses around 20% of peers are publicly reachable, with DICE addresses this grows to around 80%.
 
 **DICE Addresses** are self-contained URLs that embed connectivity information:
 
@@ -34,7 +34,7 @@ npm install @xkore/dice
 ## Quick Start
 
 ```typescript
-import { Client, AddressType } from '@xkore/dice';
+import { Client, AddressType } from "@xkore/dice";
 
 const diceClient = new Client({
 	[AddressType.IPV6]: {
@@ -70,17 +70,16 @@ await diceClient.close();
 
 [**@xkore/dice**](../README.md)
 
-***
+---
 
 [@xkore/dice](../README.md) / Client
-
-
 
 Defined in: [packages/client/src/models/Client/index.ts:17](https://github.com/visionsofparadise/dice/blob/0c3f0caa1da797c66fef401dca16ce82c9f61f5b/packages/client/src/models/Client/index.ts#L17)
 
 DICE Client for peer-to-peer networking without infrastructure dependencies.
 
 Manages dual-stack IPv4/IPv6 overlays and provides a high-level interface for:
+
 - Generating your own DICE addresses
 - Sending messages to others' DICE addresses
 - Automatic NAT traversal and connectivity handling
@@ -89,15 +88,15 @@ Manages dual-stack IPv4/IPv6 overlays and provides a high-level interface for:
 
 ```typescript
 const client = new Client({
-  [AddressType.IPv4]: { socket: ipv4Socket },
-  [AddressType.IPv6]: { socket: ipv6Socket }
+	[AddressType.IPv4]: { socket: ipv4Socket },
+	[AddressType.IPv6]: { socket: ipv6Socket },
 });
 
 await client.open();
 console.log("My address:", client.diceAddress.toString());
 
 client.on("diceaddress", (diceaddress) => {
-  console.log(diceAddress.toString());
+	console.log(diceAddress.toString());
 });
 
 await client.send(targetAddress, messageBuffer);
@@ -148,7 +147,7 @@ and emits the 'close' event when complete.
 
 `void`
 
-***
+---
 
 ### open()
 
@@ -174,7 +173,7 @@ Emits 'open' event when ready to send/receive messages.
 
 Promise that resolves when client is fully operational
 
-***
+---
 
 ### requestBind()
 
@@ -203,7 +202,7 @@ Promise that resolves when coordination is complete
 
 When unable to request bind (no coordinators or overlays)
 
-***
+---
 
 ### send()
 
@@ -264,11 +263,9 @@ DiceAddress
 
 [**@xkore/dice**](../README.md)
 
-***
+---
 
 [@xkore/dice](../README.md) / Overlay
-
-
 
 Defined in: [packages/client/src/models/Overlay/index.ts:35](https://github.com/visionsofparadise/dice/blob/0c3f0caa1da797c66fef401dca16ce82c9f61f5b/packages/client/src/models/Overlay/index.ts#L35)
 
@@ -283,8 +280,8 @@ for NAT traversal.
 
 ```typescript
 const overlay = new Overlay({
-  socket,
-  bootstrapAddresses: BOOTSTRAP_ADDRESS[AddressType.IPv4]
+	socket,
+	bootstrapAddresses: BOOTSTRAP_ADDRESS[AddressType.IPv4],
 });
 
 await overlay.open();
@@ -336,7 +333,7 @@ response listeners, and emits the 'close' event.
 
 `void`
 
-***
+---
 
 ### healthcheck()
 
@@ -359,7 +356,7 @@ connectivity and remove dead peers.
 
 Promise that resolves when health check cycle completes
 
-***
+---
 
 ### open()
 
@@ -384,7 +381,7 @@ bootstraps from the network by discovering initial coordinators.
 
 Promise that resolves when overlay is operational
 
-***
+---
 
 ### send()
 
@@ -406,7 +403,7 @@ Sends a UDP message to a specific network address.
 
 Promise that resolves when message is sent (or retries exhausted)
 
-***
+---
 
 ### findAddresses()
 
@@ -428,7 +425,7 @@ Discovers new coordinator addresses through iterative network exploration.
 
 Promise resolving to array of discovered addresses, sorted by latency
 
-***
+---
 
 ### handleAddress()
 
@@ -437,6 +434,7 @@ Promise resolving to array of discovered addresses, sorted by latency
 Defined in: [packages/client/src/models/Overlay/index.ts:213](https://github.com/visionsofparadise/dice/blob/0c3f0caa1da797c66fef401dca16ce82c9f61f5b/packages/client/src/models/Overlay/index.ts#L213)
 
 Handles several critical functions:
+
 - Updates reachability status when receiving unsolicited messages
 - Manages NAT binding cache for successful connections
 - Adds/removes peers from candidate pool based on connectivity flags
@@ -452,7 +450,7 @@ Handles several critical functions:
 
 `void`
 
-***
+---
 
 ### handleReflection()
 
@@ -472,7 +470,7 @@ Processes external address reflections to detect NAT type and external IP.
 
 `void`
 
-***
+---
 
 ### list()
 
@@ -498,7 +496,7 @@ Promise resolving to array of addresses from the peer
 
 When request times out or peer doesn't respond
 
-***
+---
 
 ### noop()
 
@@ -520,7 +518,7 @@ Sends a no-operation message to create NAT binding.
 
 Promise that resolves when noop is sent
 
-***
+---
 
 ### ping()
 
@@ -546,7 +544,7 @@ Promise that resolves when pong is received
 
 When ping times out or target is unreachable
 
-***
+---
 
 ### requestBind()
 
@@ -557,6 +555,7 @@ Defined in: [packages/client/src/models/Overlay/index.ts:278](https://github.com
 Requests NAT traversal coordination through relay peers.
 
 Implements the DICE hole punching protocol by:
+
 1. Sending a noop to create outbound NAT binding
 2. Requesting coordinators to signal the target peer
 3. Waiting for the target to initiate contact using our NAT binding
