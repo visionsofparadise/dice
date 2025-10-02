@@ -9,6 +9,8 @@ export const closeClient = (client: Client): void => {
 	client.events.removeListener("error", client.clientListeners.errorListener);
 
 	for (const addressType of [AddressType.IPv6, AddressType.IPv4]) {
+		client.overlays[addressType]?.socket.removeListener("message", client.overlaySocketListeners.messageListener);
+
 		client.overlays[addressType]?.events.removeListener("address", client.overlayListeners.addressListener);
 		client.overlays[addressType]?.close();
 	}

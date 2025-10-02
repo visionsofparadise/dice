@@ -1,4 +1,5 @@
 import { defaults } from "@technically/lodash";
+import { RemoteInfo } from "dgram";
 import EventEmitter from "events";
 import { Logger, wrapLogger } from "../../utilities/Logger";
 import { RequiredProperties } from "../../utilities/RequiredProperties";
@@ -19,6 +20,7 @@ export namespace Client {
 		close: [];
 		diceAddress: [diceAddress: DiceAddress];
 		error: [error: unknown];
+		message: [message: Uint8Array, remoteInfo: RemoteInfo];
 		open: [];
 	}
 
@@ -178,6 +180,12 @@ export class Client {
 	overlayListeners = {
 		addressListener: () => {
 			this.events.emit("diceAddress", this.diceAddress);
+		},
+	};
+
+	overlaySocketListeners = {
+		messageListener: (message: Uint8Array, remoteInfo: RemoteInfo) => {
+			this.events.emit("message", message, remoteInfo);
 		},
 	};
 

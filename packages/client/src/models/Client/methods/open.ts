@@ -9,6 +9,8 @@ export const openClient = async (client: Client, isBootstrapping = true): Promis
 	client.events.on("error", client.clientListeners.errorListener);
 
 	for (const addressType of [AddressType.IPv6, AddressType.IPv4]) {
+		client.overlays[addressType]?.socket.on("message", client.overlaySocketListeners.messageListener);
+
 		client.overlays[addressType]?.events.on("address", client.overlayListeners.addressListener);
 		await client.overlays[addressType]?.open(isBootstrapping);
 	}
