@@ -11,11 +11,13 @@ export const sendOverlay = async (overlay: Overlay, address: Address, buffer: Ui
 	overlay.logger?.debug(`Sending ${buffer.byteLength} bytes via ${address.toString()}`);
 
 	if (address.key === overlay.external?.key) {
-		await overlay.handleBuffer(buffer, {
-			buffer,
-			overlay: overlay,
-			remoteAddress: overlay.external,
-			remoteInfo: overlay.external.toRemoteInfo(buffer.byteLength),
+		setImmediate(() => {
+			overlay.handleBuffer(buffer, {
+				buffer,
+				overlay: overlay,
+				remoteAddress: overlay.external,
+				remoteInfo: overlay.external!.toRemoteInfo(buffer.byteLength),
+			});
 		});
 
 		return;

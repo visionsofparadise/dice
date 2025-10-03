@@ -80,7 +80,7 @@ await diceClient.close();
 
 
 
-Defined in: [packages/client/src/models/Client/index.ts:18](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Client/index.ts#L18)
+Defined in: [packages/client/src/models/Client/index.ts:18](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L18)
 
 DICE Client for peer-to-peer networking without infrastructure dependencies.
 
@@ -113,7 +113,7 @@ await client.send(targetAddress, messageBuffer);
 
 > **new Client**(`options?`): `Client`
 
-Defined in: [packages/client/src/models/Client/index.ts:89](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Client/index.ts#L89)
+Defined in: [packages/client/src/models/Client/index.ts:89](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L89)
 
 Creates a new DICE client.
 
@@ -135,7 +135,7 @@ Configuration including sockets and networking parameters
 
 > **close**: (...`args`) => `void`
 
-Defined in: [packages/client/src/models/Client/index.ts:126](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Client/index.ts#L126)
+Defined in: [packages/client/src/models/Client/index.ts:126](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L126)
 
 Closes the DICE client and all underlying network connections.
 
@@ -158,7 +158,7 @@ and emits the 'close' event when complete.
 
 > **open**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Client/index.ts:138](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Client/index.ts#L138)
+Defined in: [packages/client/src/models/Client/index.ts:138](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L138)
 
 Opens the DICE client and begins peer discovery.
 
@@ -184,7 +184,7 @@ Promise that resolves when client is fully operational
 
 > **requestBind**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Client/index.ts:151](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Client/index.ts#L151)
+Defined in: [packages/client/src/models/Client/index.ts:151](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L151)
 
 Requests NAT traversal coordination for a target endpoint.
 
@@ -213,7 +213,7 @@ When unable to request bind (no coordinators or overlays)
 
 > **send**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Client/index.ts:172](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Client/index.ts#L172)
+Defined in: [packages/client/src/models/Client/index.ts:172](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L172)
 
 Sends a message directly to another DICE address.
 
@@ -248,7 +248,7 @@ await client.send(targetAddress, message);
 
 > **get** **diceAddress**(): `DiceAddress`
 
-Defined in: [packages/client/src/models/Client/index.ts:204](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Client/index.ts#L204)
+Defined in: [packages/client/src/models/Client/index.ts:204](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L204)
 
 The current DICE address.
 
@@ -274,7 +274,7 @@ DiceAddress
 
 
 
-Defined in: [packages/client/src/models/Overlay/index.ts:35](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L35)
+Defined in: [packages/client/src/models/Overlay/index.ts:35](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L35)
 
 Single-stack overlay network for DICE protocol implementation.
 
@@ -301,7 +301,7 @@ console.log("External address:", overlay.external?.toString());
 
 > **new Overlay**(`options`): `Overlay`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:119](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L119)
+Defined in: [packages/client/src/models/Overlay/index.ts:119](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L119)
 
 Creates a new overlay network instance.
 
@@ -323,7 +323,7 @@ Configuration including socket and networking parameters
 
 > **close**: (...`args`) => `void`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:157](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L157)
+Defined in: [packages/client/src/models/Overlay/index.ts:157](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L157)
 
 Closes an overlay network and cleans up resources.
 
@@ -346,7 +346,7 @@ response listeners, and emits the 'close' event.
 
 > **healthcheck**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:165](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L165)
+Defined in: [packages/client/src/models/Overlay/index.ts:165](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L165)
 
 Runs candidate and coordinator health checks in parallel to verify
 connectivity and remove dead peers.
@@ -369,7 +369,7 @@ Promise that resolves when health check cycle completes
 
 > **open**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:180](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L180)
+Defined in: [packages/client/src/models/Overlay/index.ts:180](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L180)
 
 Opens an overlay network and begins peer discovery.
 
@@ -394,7 +394,7 @@ Promise that resolves when overlay is operational
 
 > **send**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:190](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L190)
+Defined in: [packages/client/src/models/Overlay/index.ts:190](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L190)
 
 Sends a UDP message to a specific network address.
 
@@ -416,7 +416,7 @@ Promise that resolves when message is sent (or retries exhausted)
 
 > **findAddresses**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:199](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L199)
+Defined in: [packages/client/src/models/Overlay/index.ts:199](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L199)
 
 Discovers new coordinator addresses through iterative network exploration.
 
@@ -438,7 +438,7 @@ Promise resolving to array of discovered addresses, sorted by latency
 
 > **handleAddress**: (...`args`) => `void`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:213](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L213)
+Defined in: [packages/client/src/models/Overlay/index.ts:213](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L213)
 
 Handles several critical functions:
 - Updates reachability status when receiving unsolicited messages
@@ -462,7 +462,7 @@ Handles several critical functions:
 
 > **handleReflection**: (...`args`) => `void`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:227](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L227)
+Defined in: [packages/client/src/models/Overlay/index.ts:227](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L227)
 
 Processes external address reflections to detect NAT type and external IP.
 
@@ -482,7 +482,7 @@ Processes external address reflections to detect NAT type and external IP.
 
 > **list**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:240](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L240)
+Defined in: [packages/client/src/models/Overlay/index.ts:240](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L240)
 
 Requests a list of known addresses from a peer.
 
@@ -508,7 +508,7 @@ When request times out or peer doesn't respond
 
 > **noop**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:248](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L248)
+Defined in: [packages/client/src/models/Overlay/index.ts:248](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L248)
 
 Sends a no-operation message to create NAT binding.
 
@@ -530,7 +530,7 @@ Promise that resolves when noop is sent
 
 > **ping**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:259](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L259)
+Defined in: [packages/client/src/models/Overlay/index.ts:259](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L259)
 
 Sends a ping message and waits for a pong response.
 
@@ -556,7 +556,7 @@ When ping times out or target is unreachable
 
 > **requestBind**: (...`args`) => `Promise`
 
-Defined in: [packages/client/src/models/Overlay/index.ts:278](https://github.com/visionsofparadise/dice/blob/9aec52bddd6adde6e75cb9f7d8d655f0292f25c8/packages/client/src/models/Overlay/index.ts#L278)
+Defined in: [packages/client/src/models/Overlay/index.ts:278](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L278)
 
 Requests NAT traversal coordination through relay peers.
 

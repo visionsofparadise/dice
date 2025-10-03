@@ -13,6 +13,7 @@ export const closeOverlay = (overlay: Overlay): void => {
 	overlay.events.removeListener("error", overlay.overlayListeners.errorListener);
 
 	for (const { abort } of overlay.responseListenerMap.values()) abort.abort("close");
+	overlay.responseListenerMap.clear();
 
 	overlay.state = Overlay.STATE.CLOSED;
 	overlay.events.emit("close");
