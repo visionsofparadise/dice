@@ -1,6 +1,6 @@
 {
 	"name": "@xkore/dice",
-	"version": "0.3.6",
+	"version": "0.3.7",
 	"description": "Distributed Interactive Connectivity Establishment",
 	"main": "./dist/index.js",
 	"module": "./dist/index.mjs",
