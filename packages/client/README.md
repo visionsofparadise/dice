@@ -74,14 +74,14 @@ Creates a new DICE client for P2P networking. The client manages dual-stack IPv4
 **Parameters:**
 
 - `options` (optional) - Configuration options
-  - `[AddressType.IPv4]` - IPv4 configuration with UDP socket
-  - `[AddressType.IPv6]` - IPv6 configuration with UDP socket
-  - `cacheSize` - Maximum cache entries for NAT bindings (default: 10,000)
-  - `concurrency` - Concurrent operations during peer discovery (default: 3)
-  - `depth` - Min/max depth for iterative peer discovery (default: {minimum: 3, maximum: 10})
-  - `healthcheckIntervalMs` - Interval between health checks in ms (default: 60,000)
-  - `relayCount` - Number of coordinators to use for NAT traversal (default: 9)
-  - `logger` - Optional logger instance for debugging
+    - `[AddressType.IPv4]` - IPv4 configuration with UDP socket
+    - `[AddressType.IPv6]` - IPv6 configuration with UDP socket
+    - `cacheSize` - Maximum cache entries for NAT bindings (default: 10,000)
+    - `concurrency` - Concurrent operations during peer discovery (default: 3)
+    - `depth` - Min/max depth for iterative peer discovery (default: {minimum: 3, maximum: 10})
+    - `healthcheckIntervalMs` - Interval between health checks in ms (default: 60,000)
+    - `relayCount` - Number of coordinators to use for NAT traversal (default: 9)
+    - `logger` - Optional logger instance for debugging
 
 **Examples:**
 
@@ -160,8 +160,8 @@ The method will coordinate with the target's embedded coordinator peers to estab
 - `buffer` - Message payload as Uint8Array (use TextEncoder for strings)
 - `addressType` (optional) - Force specific stack (AddressType.IPv4 or IPv6)
 - `options` (optional) - Configuration
-  - `timeoutMs` - Timeout for send operation in milliseconds
-  - `retryCount` - Number of retry attempts on failure
+    - `timeoutMs` - Timeout for send operation in milliseconds
+    - `retryCount` - Number of retry attempts on failure
 
 **Returns:** Promise that resolves when message is successfully sent
 
@@ -270,9 +270,6 @@ npm run integration
 
 # Build
 npm run build
-
-# Generate documentation
-npm run docs
 ```
 
 ## License
