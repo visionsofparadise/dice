@@ -247,7 +247,7 @@ client.events.on("open", () => {
 });
 
 client.events.on("diceAddress", (diceAddress) => {
-	console.log("My address:", diceAddress.toString());
+	console.log("My Dice address:", diceAddress.toString());
 });
 
 client.events.on("message", (message, remoteInfo) => {
