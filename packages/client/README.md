@@ -67,523 +67,193 @@ await diceClient.close();
 
 ## API Documentation
 
-<!-- API_START -->
-<!-- This section is auto-generated from TypeDoc comments - do not edit manually -->
+### Client Constructor
 
-## Client
+Creates a new DICE client for P2P networking. The client manages dual-stack IPv4/IPv6 overlays for maximum connectivity. At minimum, provide at least one socket (IPv4 or IPv6). For best results, provide both to enable dual-stack operation.
 
-[**@xkore/dice**](../README.md)
+**Parameters:**
 
-***
+- `options` (optional) - Configuration options
+  - `[AddressType.IPv4]` - IPv4 configuration with UDP socket
+  - `[AddressType.IPv6]` - IPv6 configuration with UDP socket
+  - `cacheSize` - Maximum cache entries for NAT bindings (default: 10,000)
+  - `concurrency` - Concurrent operations during peer discovery (default: 3)
+  - `depth` - Min/max depth for iterative peer discovery (default: {minimum: 3, maximum: 10})
+  - `healthcheckIntervalMs` - Interval between health checks in ms (default: 60,000)
+  - `relayCount` - Number of coordinators to use for NAT traversal (default: 9)
+  - `logger` - Optional logger instance for debugging
 
-[@xkore/dice](../README.md) / Client
-
-
-
-Defined in: [packages/client/src/models/Client/index.ts:18](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L18)
-
-DICE Client for peer-to-peer networking without infrastructure dependencies.
-
-Manages dual-stack IPv4/IPv6 overlays and provides a high-level interface for:
-- Generating your own DICE addresses
-- Sending messages to others' DICE addresses
-- Automatic NAT traversal and connectivity handling
-
-## Example
+**Examples:**
 
 ```typescript
+import { createSocket } from "dgram";
+import { Client, AddressType } from "@xkore/dice";
+
+// Dual-stack client (recommended)
 const client = new Client({
-  [AddressType.IPv4]: { socket: ipv4Socket },
-  [AddressType.IPv6]: { socket: ipv6Socket }
+	[AddressType.IPv4]: { socket: createSocket("udp4") },
+	[AddressType.IPv6]: { socket: createSocket("udp6") },
 });
 
+// Single-stack IPv4 only
+const ipv4Client = new Client({
+	[AddressType.IPv4]: { socket: createSocket("udp4") },
+});
+```
+
+---
+
+### client.open(isBootstrapping?)
+
+Opens the DICE client and establishes network connectivity.
+
+This method performs several critical operations:
+
+1. Initializes IPv4/IPv6 overlays based on provided sockets
+2. Discovers external IP addresses through peer reflection
+3. Bootstraps coordinator lists from the network (if enabled)
+4. Starts health check intervals to maintain peer pools
+5. Emits 'open' event when ready
+
+After calling this method, the client will automatically:
+
+- Maintain pools of coordinator peers for NAT traversal
+- Keep external address information up-to-date
+- Handle incoming messages and connectivity requests
+
+**Parameters:**
+
+- `isBootstrapping` (boolean, optional) - Whether to discover coordinators from bootstrap nodes (default: true). Set to false when running your own bootstrap node.
+
+**Returns:** Promise that resolves when the client is fully operational and ready to send/receive
+
+**Example:**
+
+```typescript
 await client.open();
-console.log("My address:", client.diceAddress.toString());
+console.log("Client ready at:", client.diceAddress.toString());
 
-client.on("diceaddress", (diceaddress) => {
-  console.log(diceAddress.toString());
+// Listen for address updates
+client.events.on("diceAddress", (address) => {
+	console.log("Address updated:", address.toString());
 });
-
-await client.send(targetAddress, messageBuffer);
 ```
 
-## Constructors
+---
 
-### Constructor
+### client.send(diceAddress, buffer, addressType?, options?)
 
-> **new Client**(`options?`): `Client`
+Sends a message to another peer via their DICE address.
 
-Defined in: [packages/client/src/models/Client/index.ts:89](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L89)
+This is the primary method for peer-to-peer communication. It handles:
 
-Creates a new DICE client.
+- Automatic NAT traversal using coordinators from the target address
+- Dual-stack connectivity (prefers IPv6, falls back to IPv4)
+- Connection establishment for first-time peers
+- Direct UDP delivery once connectivity is established
 
-#### Parameters
+The method will coordinate with the target's embedded coordinator peers to establish direct connectivity if needed. Once a direct connection exists, messages are sent via UDP without coordination overhead.
 
-##### options?
+**Parameters:**
 
-`Partial`\<`Options`\>
+- `diceAddress` - Target peer's DICE address (obtained from them out-of-band)
+- `buffer` - Message payload as Uint8Array (use TextEncoder for strings)
+- `addressType` (optional) - Force specific stack (AddressType.IPv4 or IPv6)
+- `options` (optional) - Configuration
+  - `timeoutMs` - Timeout for send operation in milliseconds
+  - `retryCount` - Number of retry attempts on failure
 
-Configuration including sockets and networking parameters
+**Returns:** Promise that resolves when message is successfully sent
 
-#### Returns
+**Throws:** DiceError when send fails after retries or no valid overlays available
 
-`Client`
-
-## Properties
-
-### close()
-
-> **close**: (...`args`) => `void`
-
-Defined in: [packages/client/src/models/Client/index.ts:126](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L126)
-
-Closes the DICE client and all underlying network connections.
-
-Gracefully shuts down both IPv4 and IPv6 overlays, stops healthcheck timers,
-and emits the 'close' event when complete.
-
-#### Parameters
-
-##### args
-
-...\[\]
-
-#### Returns
-
-`void`
-
-***
-
-### open()
-
-> **open**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Client/index.ts:138](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L138)
-
-Opens the DICE client and begins peer discovery.
-
-Initializes both IPv4 and IPv6 overlays, begins healthcheck cycles,
-and starts discovering coordinators from bootstrap peers.
-Emits 'open' event when ready to send/receive messages.
-
-#### Parameters
-
-##### args
-
-...\[`boolean`\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when client is fully operational
-
-***
-
-### requestBind()
-
-> **requestBind**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Client/index.ts:151](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L151)
-
-Requests NAT traversal coordination for a target endpoint.
-
-Used internally when sending to peers behind NATs. Coordinates with
-the target's coordinator peers to establish direct connectivity.
-
-#### Parameters
-
-##### args
-
-...\[`DiceAddress`, `AddressType`\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when coordination is complete
-
-#### Throws
-
-When unable to request bind (no coordinators or overlays)
-
-***
-
-### send()
-
-> **send**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Client/index.ts:172](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L172)
-
-Sends a message directly to another DICE address.
-
-Automatically handles NAT traversal if needed by coordinating with
-coordinator peers embedded in the target address. Prefers IPv6, falls back to IPv4.
-
-#### Parameters
-
-##### args
-
-...\[`DiceAddress`, `Uint8Array`\<`ArrayBufferLike`\>, `AddressType`, `SendOverlayOptions`\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when message is sent
-
-#### Example
+**Examples:**
 
 ```typescript
+// Send a text message
 const message = new TextEncoder().encode("Hello, peer!");
-
 await client.send(targetAddress, message);
+
+// Send binary data
+const data = new Uint8Array([1, 2, 3, 4]);
+await client.send(targetAddress, data);
+
+// Force IPv4 with custom timeout
+await client.send(targetAddress, message, AddressType.IPv4, {
+	timeoutMs: 5000,
+	retryCount: 3,
+});
 ```
 
-## Accessors
+---
 
-### diceAddress
+### client.diceAddress
 
-#### Get Signature
+The current DICE address of this client.
 
-> **get** **diceAddress**(): `DiceAddress`
+This address is a self-contained connectivity descriptor that includes:
 
-Defined in: [packages/client/src/models/Client/index.ts:204](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Client/index.ts#L204)
+- External IPv4/IPv6 addresses and ports
+- Coordinator peer addresses for NAT traversal coordination
+- All information needed for other peers to contact you
 
-The current DICE address.
+The address format is: `dice://[ipv6]:[port]/[coordinators]/[ipv4]:[port]/[coordinators]`
 
-The DICE address embeds connectivity information including external IP addresses
-and coordinator lists for NAT traversal. This address can be shared with other
-peers to enable direct messaging.
+Share this address with other peers (via your application's signaling mechanism) to enable them to send messages to you. The address updates automatically when:
 
-Address format: `dice://[ipv6]:[port]/[coordinators]/[ipv4]:[port]/[coordinators]`
+- External IP addresses are discovered or change
+- Coordinator lists are updated
+- Network conditions change
 
-##### Returns
+Listen to the 'diceAddress' event to be notified of updates.
 
-`DiceAddress`
+**Returns:** Your current DICE address
 
-DiceAddress
-
-## Overlay
-
-[**@xkore/dice**](../README.md)
-
-***
-
-[@xkore/dice](../README.md) / Overlay
-
-
-
-Defined in: [packages/client/src/models/Overlay/index.ts:35](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L35)
-
-Single-stack overlay network for DICE protocol implementation.
-
-Manages peer discovery, NAT traversal, and direct UDP messaging for either
-IPv4 or IPv6. Maintains pools of coordinator and candidate peers, handles
-external address detection through reflection, and coordinates hole punching
-for NAT traversal.
-
-## Example
+**Example:**
 
 ```typescript
-const overlay = new Overlay({
-  socket,
-  bootstrapAddresses: BOOTSTRAP_ADDRESS[AddressType.IPv4]
-});
+await client.open();
 
-await overlay.open();
-console.log("External address:", overlay.external?.toString());
+// Get the address
+const myAddress = client.diceAddress;
+console.log("Share this:", myAddress.toString());
+
+// Listen for updates
+client.events.on("diceAddress", (updatedAddress) => {
+	console.log("Address changed:", updatedAddress.toString());
+	// Share the new address with peers
+});
 ```
 
-## Constructors
+---
 
-### Constructor
+### client.events
 
-> **new Overlay**(`options`): `Overlay`
+Event emitter for client lifecycle and network events.
 
-Defined in: [packages/client/src/models/Overlay/index.ts:119](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L119)
+**Available Events:**
 
-Creates a new overlay network instance.
+- `open` - Emitted when client successfully opens and is ready to send/receive
+- `close` - Emitted when client closes and all connections are terminated
+- `diceAddress` - Emitted when the DICE address changes (external IP discovered, coordinators updated)
+- `message` - Emitted when receiving application-layer messages from other peers
+- `error` - Emitted when errors occur during network operations
 
-#### Parameters
+**Example:**
 
-##### options
+```typescript
+client.events.on("open", () => {
+	console.log("Client is ready");
+});
 
-`RequiredProperties`\<`Options`, `"socket"`\>
+client.events.on("diceAddress", (diceAddress) => {
+	console.log("My address:", diceAddress.toString());
+});
 
-Configuration including socket and networking parameters
-
-#### Returns
-
-`Overlay`
-
-## Properties
-
-### close()
-
-> **close**: (...`args`) => `void`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:157](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L157)
-
-Closes an overlay network and cleans up resources.
-
-Stops healthcheck intervals, removes socket listeners, aborts pending
-response listeners, and emits the 'close' event.
-
-#### Parameters
-
-##### args
-
-...\[\]
-
-#### Returns
-
-`void`
-
-***
-
-### healthcheck()
-
-> **healthcheck**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:165](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L165)
-
-Runs candidate and coordinator health checks in parallel to verify
-connectivity and remove dead peers.
-
-#### Parameters
-
-##### args
-
-...\[\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when health check cycle completes
-
-***
-
-### open()
-
-> **open**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:180](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L180)
-
-Opens an overlay network and begins peer discovery.
-
-Sets up socket listeners, starts healthcheck intervals, and optionally
-bootstraps from the network by discovering initial coordinators.
-
-#### Parameters
-
-##### args
-
-...\[`boolean`\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when overlay is operational
-
-***
-
-### send()
-
-> **send**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:190](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L190)
-
-Sends a UDP message to a specific network address.
-
-#### Parameters
-
-##### args
-
-...\[`Ipv4Address` \| `Ipv6Address`, `Uint8Array`\<`ArrayBufferLike`\>, `SendOverlayOptions`\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when message is sent (or retries exhausted)
-
-***
-
-### findAddresses()
-
-> **findAddresses**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:199](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L199)
-
-Discovers new coordinator addresses through iterative network exploration.
-
-#### Parameters
-
-##### args
-
-...\[`number`, `Set`\<`string`\>\]
-
-#### Returns
-
-`Promise`
-
-Promise resolving to array of discovered addresses, sorted by latency
-
-***
-
-### handleAddress()
-
-> **handleAddress**: (...`args`) => `void`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:213](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L213)
-
-Handles several critical functions:
-- Updates reachability status when receiving unsolicited messages
-- Manages NAT binding cache for successful connections
-- Adds/removes peers from candidate pool based on connectivity flags
-- Enforces candidate pool size limits with FIFO eviction
-
-#### Parameters
-
-##### args
-
-...\[`Ipv4Address` \| `Ipv6Address`, `Message`\<`MessageBodyType`\>\]
-
-#### Returns
-
-`void`
-
-***
-
-### handleReflection()
-
-> **handleReflection**: (...`args`) => `void`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:227](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L227)
-
-Processes external address reflections to detect NAT type and external IP.
-
-#### Parameters
-
-##### args
-
-...\[`Ipv4Address` \| `Ipv6Address`, `Ipv4Address` \| `Ipv6Address`\]
-
-#### Returns
-
-`void`
-
-***
-
-### list()
-
-> **list**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:240](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L240)
-
-Requests a list of known addresses from a peer.
-
-#### Parameters
-
-##### args
-
-...\[`Ipv4Address` \| `Ipv6Address`, `Partial`\<`ListBody`\>, `AwaitOverlayResponseOptions` & `SendOverlayOptions`\]
-
-#### Returns
-
-`Promise`
-
-Promise resolving to array of addresses from the peer
-
-#### Throws
-
-When request times out or peer doesn't respond
-
-***
-
-### noop()
-
-> **noop**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:248](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L248)
-
-Sends a no-operation message to create NAT binding.
-
-#### Parameters
-
-##### args
-
-...\[`Ipv4Address` \| `Ipv6Address`\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when noop is sent
-
-***
-
-### ping()
-
-> **ping**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:259](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L259)
-
-Sends a ping message and waits for a pong response.
-
-#### Parameters
-
-##### args
-
-...\[`Ipv4Address` \| `Ipv6Address`, `Partial`\<`PingBody`\>, `AwaitOverlayResponseOptions` & `SendOverlayOptions`\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when pong is received
-
-#### Throws
-
-When ping times out or target is unreachable
-
-***
-
-### requestBind()
-
-> **requestBind**: (...`args`) => `Promise`
-
-Defined in: [packages/client/src/models/Overlay/index.ts:278](https://github.com/visionsofparadise/dice/blob/0aa6d4d2c05adad256163663b97b59ac0c19dda3/packages/client/src/models/Overlay/index.ts#L278)
-
-Requests NAT traversal coordination through relay peers.
-
-Implements the DICE hole punching protocol by:
-1. Sending a noop to create outbound NAT binding
-2. Requesting coordinators to signal the target peer
-3. Waiting for the target to initiate contact using our NAT binding
-
-This enables direct connectivity between peers behind different NATs.
-
-#### Parameters
-
-##### args
-
-...\[`Ipv4Address` \| `Ipv6Address`, (`Ipv4Address` \| `Ipv6Address`)[], `Partial`\<`RelayBindRequestBody`\>, `AwaitOverlayResponseOptions` & `SendOverlayOptions`\]
-
-#### Returns
-
-`Promise`
-
-Promise that resolves when direct connectivity is established
-
-#### Throws
-
-When no coordinators available or bind fails
-
-<!-- API_END -->
+client.events.on("message", (message, remoteInfo) => {
+	console.log("Received:", message);
+});
+```
 
 ## Development
 

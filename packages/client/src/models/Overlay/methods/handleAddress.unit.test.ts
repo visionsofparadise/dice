@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { Overlay } from "..";
 import { Ipv4Address } from "../../Ipv4Address";
 import { Message } from "../../Message";
@@ -7,20 +8,20 @@ import { handleOverlayAddress } from "./handleAddress";
 describe("handles address", () => {
 	let overlay: Overlay;
 	let mockSocket: any;
-	let emitSpy: jest.SpyInstance;
+	let emitSpy: any;
 
 	beforeEach(() => {
 		mockSocket = {
 			address: () => ({ address: "127.0.0.1", family: "IPv4", port: 3000 }),
-			on: jest.fn(),
-			removeListener: jest.fn(),
-			send: jest.fn(),
-			close: jest.fn(),
-			unref: jest.fn(),
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			send: vi.fn(),
+			close: vi.fn(),
+			unref: vi.fn(),
 		};
 
 		overlay = new Overlay({ socket: mockSocket });
-		emitSpy = jest.spyOn(overlay.events, "emit");
+		emitSpy = vi.spyOn(overlay.events, "emit");
 
 		overlay.external = new Ipv4Address({
 			ip: new Uint8Array([127, 0, 0, 1]),
@@ -39,7 +40,7 @@ describe("handles address", () => {
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it("updates lastUnsolicitedAt and emits address when no outbound bind cache", () => {

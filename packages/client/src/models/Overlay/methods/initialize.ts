@@ -1,4 +1,4 @@
-import { sample } from "@technically/lodash";
+import { sample } from "lodash-es";
 import { Overlay } from "..";
 import { DiceError } from "../../Error";
 

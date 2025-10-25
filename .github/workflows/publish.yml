@@ -1,0 +1,62 @@
+name: Publish Client Package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/client/**'
+      - '!packages/client/package.json'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: |
+          cd packages/client
+          npm run check
+
+      - name: Run unit tests
+        run: |
+          cd packages/client
+          npm run unit
+
+      - name: Run integration tests
+        run: |
+          cd packages/client
+          npm run integration
+
+      - name: Bump version
+        run: |
+          cd packages/client
+          npm version patch -m "chore: bump @xkore/dice to %s [skip ci]"
+
+      - name: Build
+        run: |
+          cd packages/client
+          npm run build
+
+      - name: Publish to NPM
+        run: |
+          cd packages/client
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Push version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push

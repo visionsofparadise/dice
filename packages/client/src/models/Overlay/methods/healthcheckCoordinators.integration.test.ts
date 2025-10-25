@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { INTEGRATION_TEST_TIMEOUT_MS, spawnIntegrationClients } from "../../../utilities/spawnIntegrationClients";
 import { AddressType } from "../../Address/Type";
 
@@ -11,7 +12,7 @@ it(
 
 			expect(overlayA.coordinatorMap.size).toBe(1);
 
-			const mockFindAddresses = jest.fn().mockResolvedValue([]);
+			const mockFindAddresses = vi.fn().mockResolvedValue([]);
 			overlayA.findAddresses = mockFindAddresses;
 
 			await overlayA.healthcheckCoordinators();

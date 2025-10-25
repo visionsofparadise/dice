@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { Overlay } from "..";
 import { Ipv4Address } from "../../Ipv4Address";
 import { handleOverlayReflection } from "./handleReflection";
@@ -5,20 +6,20 @@ import { handleOverlayReflection } from "./handleReflection";
 describe("handles reflection", () => {
 	let overlay: Overlay;
 	let mockSocket: any;
-	let emitSpy: jest.SpyInstance;
+	let emitSpy: any;
 
 	beforeEach(() => {
 		mockSocket = {
 			address: () => ({ address: "127.0.0.1", family: "IPv4", port: 3000 }),
-			on: jest.fn(),
-			removeListener: jest.fn(),
-			send: jest.fn(),
-			close: jest.fn(),
-			unref: jest.fn(),
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			send: vi.fn(),
+			close: vi.fn(),
+			unref: vi.fn(),
 		};
 
 		overlay = new Overlay({ socket: mockSocket });
-		emitSpy = jest.spyOn(overlay.events, "emit");
+		emitSpy = vi.spyOn(overlay.events, "emit");
 
 		Object.defineProperty(overlay, "coordinators", {
 			get: () => [],
@@ -30,7 +31,7 @@ describe("handles reflection", () => {
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it("ignores duplicate remote address prefix", () => {

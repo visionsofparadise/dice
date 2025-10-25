@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { Overlay } from "..";
 import { Ipv4Address } from "../../Ipv4Address";
 import { healthcheckOverlayCandidates } from "./healthcheckCandidates";
@@ -5,16 +6,16 @@ import { healthcheckOverlayCandidates } from "./healthcheckCandidates";
 describe("healthchecks candidates", () => {
 	let overlay: Overlay;
 	let mockSocket: any;
-	let pingSpy: jest.SpyInstance;
+	let pingSpy: any;
 
 	beforeEach(() => {
 		mockSocket = {
 			address: () => ({ address: "127.0.0.1", family: "IPv4", port: 3000 }),
-			on: jest.fn(),
-			removeListener: jest.fn(),
-			send: jest.fn(),
-			close: jest.fn(),
-			unref: jest.fn(),
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			send: vi.fn(),
+			close: vi.fn(),
+			unref: vi.fn(),
 		};
 
 		overlay = new Overlay({ socket: mockSocket });
@@ -24,7 +25,7 @@ describe("healthchecks candidates", () => {
 			port: 3000,
 		});
 
-		pingSpy = jest.spyOn(overlay, "ping").mockResolvedValue();
+		pingSpy = vi.spyOn(overlay, "ping").mockResolvedValue();
 
 		Object.defineProperty(overlay, "candidates", {
 			get: () => [...overlay.candidateMap.values()],
@@ -34,7 +35,7 @@ describe("healthchecks candidates", () => {
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it("removes candidates that fail ping", async () => {
@@ -51,7 +52,7 @@ describe("healthchecks candidates", () => {
 		overlay.candidateMap.set(goodCandidate.key, goodCandidate);
 		overlay.candidateMap.set(badCandidate.key, badCandidate);
 
-		pingSpy.mockImplementation((address) => {
+		pingSpy.mockImplementation((address: any) => {
 			if (address === badCandidate) {
 				return Promise.reject(new Error("Ping failed"));
 			}
@@ -84,7 +85,7 @@ describe("healthchecks candidates", () => {
 		overlay.candidateMap.set(failCandidate1.key, failCandidate1);
 		overlay.candidateMap.set(failCandidate2.key, failCandidate2);
 
-		pingSpy.mockImplementation((address) => {
+		pingSpy.mockImplementation((address: any) => {
 			if (address === successCandidate) {
 				return Promise.resolve();
 			}

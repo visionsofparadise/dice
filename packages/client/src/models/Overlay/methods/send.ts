@@ -1,6 +1,7 @@
 import ipaddr from "ipaddr.js";
 import { Overlay } from "..";
 import { Address } from "../../Address";
+import { DiceError } from "../../Error";
 
 export interface SendOverlayOptions {
 	retryCount?: number;
@@ -10,21 +11,11 @@ export interface SendOverlayOptions {
 export const sendOverlay = async (overlay: Overlay, address: Address, buffer: Uint8Array, options?: SendOverlayOptions): Promise<void> => {
 	overlay.logger?.debug(`Sending ${buffer.byteLength} bytes via ${address.toString()}`);
 
-	if (address.key === overlay.external?.key) {
-		setImmediate(() => {
-			overlay.handleBuffer(buffer, {
-				buffer,
-				overlay: overlay,
-				remoteAddress: overlay.external,
-				remoteInfo: overlay.external!.toRemoteInfo(buffer.byteLength),
-			});
-		});
-
-		return;
-	}
 	let attempts = 0;
+	let anySuccess = false;
+	const retryCount = options?.retryCount || 3;
 
-	while (attempts++ < (options?.retryCount || 3) && !options?.signal?.aborted) {
+	while (attempts < retryCount && !options?.signal?.aborted) {
 		try {
 			await new Promise<void>((resolve, reject) =>
 				overlay.socket.send(buffer, address.port, ipaddr.fromByteArray([...address.ip.values()]).toString(), (error, byteLength) => {
@@ -39,21 +30,39 @@ export const sendOverlay = async (overlay: Overlay, address: Address, buffer: Ui
 					resolve();
 				})
 			);
+
+			anySuccess = true;
 		} catch (error) {
 			overlay.events.emit("error", error);
 		}
 
-		if (!options?.signal) break;
+		attempts++;
 
-		await new Promise<void>((resolve) => {
-			const listener = () => {
-				options.signal?.removeEventListener("abort", listener);
-				resolve();
-			};
+		// Wait before next attempt (unless this was the last attempt or we're aborting)
+		if (attempts < retryCount && !options?.signal?.aborted) {
+			await new Promise<void>((resolve) => {
+				const delay = 250 * 2 ** (attempts - 1);
 
-			options.signal?.addEventListener("abort", listener);
+				if (options?.signal) {
+					const abortListener = () => {
+						options.signal?.removeEventListener("abort", abortListener);
+						resolve();
+					};
 
-			setTimeout(() => resolve(), 250 * 2 ** attempts);
-		});
+					options.signal.addEventListener("abort", abortListener);
+
+					setTimeout(() => {
+						options.signal?.removeEventListener("abort", abortListener);
+						resolve();
+					}, delay);
+				} else {
+					setTimeout(resolve, delay);
+				}
+			});
+		}
+	}
+
+	if (!anySuccess) {
+		throw new DiceError("Sending failed");
 	}
 };

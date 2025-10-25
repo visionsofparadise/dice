@@ -1,4 +1,4 @@
-import { sampleSize } from "@technically/lodash";
+import { sampleSize } from "lodash-es";
 import { Overlay } from "..";
 import { Ipv4Address } from "../../Ipv4Address";
 import { Ipv6Address } from "../../Ipv6Address";

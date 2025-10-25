@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { Overlay } from "..";
 import { Ipv4Address } from "../../Ipv4Address";
 import { Message } from "../../Message";
@@ -9,17 +10,17 @@ describe("handles message", () => {
 	let mockSocket: any;
 	let context: Overlay.Context;
 	let remoteAddress: Ipv4Address;
-	let handlePingSpy: jest.SpyInstance;
-	let handleAddressSpy: jest.SpyInstance;
+	let handlePingSpy: any;
+	let handleAddressSpy: any;
 
 	beforeEach(() => {
 		mockSocket = {
 			address: () => ({ address: "127.0.0.1", family: "IPv4", port: 3000 }),
-			on: jest.fn(),
-			removeListener: jest.fn(),
-			send: jest.fn(),
-			close: jest.fn(),
-			unref: jest.fn(),
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			send: vi.fn(),
+			close: vi.fn(),
+			unref: vi.fn(),
 		};
 
 		overlay = new Overlay({ socket: mockSocket });
@@ -41,21 +42,21 @@ describe("handles message", () => {
 			remoteAddress,
 		};
 
-		handlePingSpy = jest.spyOn(overlay, "handlePing").mockImplementation();
-		handleAddressSpy = jest.spyOn(overlay, "handleAddress").mockImplementation();
+		handlePingSpy = vi.spyOn(overlay, "handlePing").mockResolvedValue(undefined);
+		handleAddressSpy = vi.spyOn(overlay, "handleAddress").mockReturnValue(undefined);
 
 		overlay.logger = {
-			debug: jest.fn(),
-			error: jest.fn(),
-			info: jest.fn(),
-			log: jest.fn(),
-			trace: jest.fn(),
-			warn: jest.fn(),
+			debug: vi.fn(),
+			error: vi.fn(),
+			info: vi.fn(),
+			log: vi.fn(),
+			trace: vi.fn(),
+			warn: vi.fn(),
 		};
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it("handles PING message", async () => {
@@ -75,7 +76,7 @@ describe("handles message", () => {
 
 	it("handles response messages via response listener map", async () => {
 		const transactionId = new Uint8Array([13, 14, 15]);
-		const mockListener = jest.fn();
+		const mockListener = vi.fn();
 
 		const key = remoteAddress.key + MessageBodyType.PONG + "0d0e0f";
 		overlay.responseListenerMap.set(key, {

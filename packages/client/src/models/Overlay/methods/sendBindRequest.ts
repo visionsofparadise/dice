@@ -1,4 +1,4 @@
-import { defaults, sampleSize } from "@technically/lodash";
+import { defaults, sampleSize } from "lodash-es";
 import { Overlay } from "..";
 import { Address } from "../../Address";
 import { DiceError } from "../../Error";

@@ -1,4 +1,4 @@
-import { defaults } from "@technically/lodash";
+import { defaults } from "lodash-es";
 import { Overlay } from "..";
 import { Address } from "../../Address";
 import { Message } from "../../Message";

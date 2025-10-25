@@ -1,4 +1,4 @@
-import { defaults } from "@technically/lodash";
+import { defaults } from "lodash-es";
 import { RemoteInfo, Socket as UdpSocket } from "dgram";
 import EventEmitter from "events";
 import { BOOTSTRAP_ADDRESS } from "../../utilities/bootstrapAddresses";

@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { Overlay } from "..";
 import { Ipv4Address } from "../../Ipv4Address";
 import { Message } from "../../Message";
@@ -8,23 +9,23 @@ import { handleOverlayBuffer } from "./handleBuffer";
 describe("handles buffer", () => {
 	let overlay: Overlay;
 	let mockSocket: any;
-	let emitSpy: jest.SpyInstance;
+	let emitSpy: any;
 	let context: any;
 
 	beforeEach(() => {
 		mockSocket = {
 			address: () => ({ address: "127.0.0.1", family: "IPv4", port: 3000 }),
-			on: jest.fn(),
-			removeListener: jest.fn(),
-			send: jest.fn(),
-			close: jest.fn(),
-			unref: jest.fn(),
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			send: vi.fn(),
+			close: vi.fn(),
+			unref: vi.fn(),
 		};
 
 		overlay = new Overlay({ socket: mockSocket });
 		overlay.state = Overlay.STATE.OPENED;
 
-		emitSpy = jest.spyOn(overlay.events, "emit");
+		emitSpy = vi.spyOn(overlay.events, "emit");
 
 		context = {
 			remoteInfo: {
@@ -37,17 +38,17 @@ describe("handles buffer", () => {
 
 		// Mock logger
 		overlay.logger = {
-			debug: jest.fn(),
-			error: jest.fn(),
-			info: jest.fn(),
-			log: jest.fn(),
-			trace: jest.fn(),
-			warn: jest.fn(),
+			debug: vi.fn(),
+			error: vi.fn(),
+			info: vi.fn(),
+			log: vi.fn(),
+			trace: vi.fn(),
+			warn: vi.fn(),
 		};
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it("ignores buffer with wrong magic bytes", async () => {

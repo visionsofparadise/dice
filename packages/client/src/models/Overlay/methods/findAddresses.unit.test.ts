@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { Overlay } from "..";
 import { Ipv4Address } from "../../Ipv4Address";
 import { findOverlayAddresses } from "./findAddresses";
@@ -5,17 +6,17 @@ import { findOverlayAddresses } from "./findAddresses";
 describe("finds addresses", () => {
 	let overlay: Overlay;
 	let mockSocket: any;
-	let listSpy: jest.SpyInstance;
-	let pingSpy: jest.SpyInstance;
+	let listSpy: any;
+	let pingSpy: any;
 
 	beforeEach(() => {
 		mockSocket = {
 			address: () => ({ address: "127.0.0.1", family: "IPv4", port: 3000 }),
-			on: jest.fn(),
-			removeListener: jest.fn(),
-			send: jest.fn(),
-			close: jest.fn(),
-			unref: jest.fn(),
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			send: vi.fn(),
+			close: vi.fn(),
+			unref: vi.fn(),
 		};
 
 		overlay = new Overlay({ socket: mockSocket });
@@ -23,8 +24,8 @@ describe("finds addresses", () => {
 		overlay.options.concurrency = 2;
 		overlay.options.depth = { minimum: 2, maximum: 5 };
 
-		listSpy = jest.spyOn(overlay, "list").mockResolvedValue([]);
-		pingSpy = jest.spyOn(overlay, "ping").mockResolvedValue();
+		listSpy = vi.spyOn(overlay, "list").mockResolvedValue([]);
+		pingSpy = vi.spyOn(overlay, "ping").mockResolvedValue();
 
 		Object.defineProperty(overlay, "coordinators", {
 			get: () => [...overlay.coordinatorMap.values()],
@@ -36,7 +37,7 @@ describe("finds addresses", () => {
 	});
 
 	afterEach(() => {
-		jest.restoreAllMocks();
+		vi.restoreAllMocks();
 	});
 
 	it("stops at minimum depth when ping time increases", async () => {
@@ -58,7 +59,7 @@ describe("finds addresses", () => {
 		overlay.coordinatorMap.set(initialAddress.key, initialAddress);
 		overlay.options.depth = { minimum: 1, maximum: 3 };
 
-		listSpy.mockImplementation((address) => {
+		listSpy.mockImplementation((address: any) => {
 			if (address === initialAddress) {
 				return Promise.resolve([nextAddress1]);
 			}
