@@ -243,7 +243,7 @@ Event emitter for client lifecycle and network events.
 
 ```typescript
 client.events.on("open", () => {
-	console.log("Client is ready");
+	console.log("Client ready");
 });
 
 client.events.on("diceAddress", (diceAddress) => {
