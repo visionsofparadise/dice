@@ -13,6 +13,7 @@ export namespace Ipv6Address {
 	export interface Cache {
 		buffer?: Uint8Array;
 		byteLength?: number;
+		isPrivate?: boolean;
 		key?: string;
 		prefix?: string;
 		string?: string;
@@ -65,7 +66,9 @@ export class Ipv6Address implements Ipv6Address.Properties {
 	}
 
 	get isPrivate(): boolean {
-		return (this.ip[0] === 0xfc && this.ip[1] === 0x00) || (this.ip[0] === 0xfd && this.ip[1] === 0x00) || (this.ip[0] === 0xfe && this.ip[1] === 0x80);
+		if (this.cache.isPrivate !== undefined) return this.cache.isPrivate;
+
+		return (this.cache.isPrivate = (this.ip[0] === 0xfc && this.ip[1] === 0x00) || (this.ip[0] === 0xfd && this.ip[1] === 0x00) || (this.ip[0] === 0xfe && this.ip[1] === 0x80));
 	}
 
 	get key(): string {

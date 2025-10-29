@@ -1,4 +1,5 @@
 import { AddressType } from "../Address/Type";
+import { DiceError } from "../Error";
 import { Ipv4Address } from "../Ipv4Address";
 import { Ipv6Address } from "../Ipv6Address";
 import { DiceAddressCodec, DiceAddressProperties } from "./Codec";
@@ -17,32 +18,65 @@ export class DiceAddress implements DiceAddress.Properties {
 	static PROTOCOL = "dice://";
 
 	static fromString(string: string) {
+		// Validate protocol prefix
+		if (!string || !string.startsWith(this.PROTOCOL)) {
+			throw new DiceError(`Invalid DICE address: must start with "${this.PROTOCOL}"`);
+		}
+
+		// Split address components
 		const body = string.slice(this.PROTOCOL.length);
-		const [ipv6String, ipv6RelayAddressStrings, ipv4String, ipv4RelayAddressStrings] = body.split("/");
+		const parts = body.split("/");
 
+		if (parts.length !== 4) {
+			throw new DiceError(`Invalid DICE address format: expected 4 parts separated by "/", got ${parts.length}`);
+		}
+
+		const [ipv6String, ipv6RelayAddressStrings, ipv4String, ipv4RelayAddressStrings] = parts;
+
+		// Parse IPv6 endpoint (optional but validated if present)
 		let ipv6: Ipv6Address | undefined = undefined;
-
-		try {
-			if (ipv6String) ipv6 = Ipv6Address.fromString(ipv6String);
-		} catch (error) {}
-
 		let ipv6RelayAddresses: Array<Ipv6Address> | undefined = undefined;
 
-		try {
-			if (ipv6RelayAddressStrings) ipv6RelayAddresses = ipv6RelayAddressStrings.split(",").map((string) => Ipv6Address.fromString(string));
-		} catch (error) {}
+		if (ipv6String) {
+			try {
+				ipv6 = Ipv6Address.fromString(ipv6String);
+			} catch (error) {
+				throw new DiceError(`Invalid IPv6 address "${ipv6String}": ${error instanceof Error ? error.message : error}`);
+			}
 
+			if (ipv6RelayAddressStrings) {
+				try {
+					ipv6RelayAddresses = ipv6RelayAddressStrings.split(",").map((addrString) => Ipv6Address.fromString(addrString));
+				} catch (error) {
+					throw new DiceError(`Invalid IPv6 coordinator address in "${ipv6RelayAddressStrings}": ${error instanceof Error ? error.message : error}`);
+				}
+			}
+		}
+
+		// Parse IPv4 endpoint (optional but validated if present)
 		let ipv4: Ipv4Address | undefined = undefined;
-
-		try {
-			if (ipv4String) ipv4 = Ipv4Address.fromString(ipv4String);
-		} catch (error) {}
-
 		let ipv4RelayAddresses: Array<Ipv4Address> | undefined = undefined;
 
-		try {
-			if (ipv4RelayAddressStrings) ipv4RelayAddresses = ipv4RelayAddressStrings.split(",").map((string) => Ipv4Address.fromString(string));
-		} catch (error) {}
+		if (ipv4String) {
+			try {
+				ipv4 = Ipv4Address.fromString(ipv4String);
+			} catch (error) {
+				throw new DiceError(`Invalid IPv4 address "${ipv4String}": ${error instanceof Error ? error.message : error}`);
+			}
+
+			if (ipv4RelayAddressStrings) {
+				try {
+					ipv4RelayAddresses = ipv4RelayAddressStrings.split(",").map((addrString) => Ipv4Address.fromString(addrString));
+				} catch (error) {
+					throw new DiceError(`Invalid IPv4 coordinator address in "${ipv4RelayAddressStrings}": ${error instanceof Error ? error.message : error}`);
+				}
+			}
+		}
+
+		// Require at least one valid endpoint
+		if (!ipv6 && !ipv4) {
+			throw new DiceError("Invalid DICE address: must have at least one IPv4 or IPv6 endpoint");
+		}
 
 		return new DiceAddress({
 			[AddressType.IPv6]: ipv6

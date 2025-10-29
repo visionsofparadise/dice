@@ -1,7 +1,5 @@
 import { Codec } from "bufferfy";
 import { AddressCodec } from "../Address/Codec";
-import { Ipv4AddressCodec } from "../Ipv4Address/Codec";
-import { Ipv6AddressCodec } from "../Ipv6Address/Codec";
 import { TransactionIdCodec } from "../TransactionId/Codec";
 
 export enum MessageBodyType {
@@ -11,8 +9,6 @@ export enum MessageBodyType {
 	RELAY_BIND_REQUEST,
 	BIND_REQUEST,
 	BIND,
-	LIST,
-	ADDRESSES,
 }
 
 export const NoopBodyCodec = Codec.Object({
@@ -59,23 +55,7 @@ export const BindBodyCodec = Codec.Object({
 
 export interface BindBody extends Codec.Type<typeof BindBodyCodec> {}
 
-export const ListBodyCodec = Codec.Object({
-	type: Codec.Constant(MessageBodyType.LIST),
-	transactionId: TransactionIdCodec,
-});
-
-export interface ListBody extends Codec.Type<typeof ListBodyCodec> {}
-
-export const AddressesBodyCodec = Codec.Object({
-	type: Codec.Constant(MessageBodyType.ADDRESSES),
-	transactionId: TransactionIdCodec,
-	addresses: Codec.Union([Codec.Array(Ipv6AddressCodec, Codec.UInt(8)), Codec.Array(Ipv4AddressCodec, Codec.UInt(8))], Codec.UInt(8)),
-	reflectionAddress: AddressCodec,
-});
-
-export interface AddressesBody extends Codec.Type<typeof AddressesBodyCodec> {}
-
-export const MessageBodyCodec = Codec.Union([NoopBodyCodec, PingBodyCodec, PongBodyCodec, RelayBindRequestBodyCodec, BindRequestBodyCodec, BindBodyCodec, ListBodyCodec, AddressesBodyCodec]);
+export const MessageBodyCodec = Codec.Union([NoopBodyCodec, PingBodyCodec, PongBodyCodec, RelayBindRequestBodyCodec, BindRequestBodyCodec, BindBodyCodec]);
 
 export type MessageBody = Codec.Type<typeof MessageBodyCodec>;
 

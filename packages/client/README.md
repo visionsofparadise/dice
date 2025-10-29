@@ -4,26 +4,37 @@
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Architecture](#architecture)
 - [API Documentation](#api-documentation)
+- [Events](#events)
 - [Development](#development)
 
-DICE stands for distributed interactive connectivity establishment, a public and peer-to-peer ICE/STUN-like service without servers.
+**DICE (Distributed Interactive Connectivity Establishment)** is a NAT traversal transport layer that wraps your UDP traffic to establish direct peer-to-peer connections without centralized infrastructure.
 
-Most peers in peer-to-peer networks cannot participate fully because they are behind firewalls and NATs, preventing them from becoming publicly reachable. DICE is a general solution that allows peers to coordinate to become connectable.
+## Overview
 
-It handles:
+DICE handles NAT traversal for UDP-based peer-to-peer applications:
 
-- External address discovery
-- NAT/Firewall detection and traversal
-- UDP hole punching.
+- **External address discovery** via peer reflection
+- **NAT/Firewall detection** (symmetric NAT, public reachability)
+- **UDP hole punching** to establish direct connections
+- **Coordinator discovery** from your application traffic
+- **Dual-stack support** (IPv4 and IPv6)
 
-DICE multiplexes on the same port as your p2p application, provides you with a publicly reachable DICE address, and facilitates sending to others' DICE addresses. With standard addresses around 20% of peers are publicly reachable, with DICE addresses this grows to around 80%.
+With standard UDP addresses, ~20% of peers are publicly reachable. DICE achieves 50-95% direct connectivity depending on region and network conditions.
 
-**DICE Addresses** are self-contained URLs that embed connectivity information:
+## DICE Addresses
+
+DICE addresses are self-contained connectivity descriptors:
 
 ```
 dice://[ipv6]:[port]/[coordinators]/[ipv4]:[port]/[coordinators]
 ```
+
+They contain:
+- Your external IPv4/IPv6 addresses and ports
+- Coordinator peers who help establish NAT bindings
+- Everything needed for peers to connect to you
 
 ## Installation
 
@@ -34,226 +45,406 @@ npm install @xkore/dice
 ## Quick Start
 
 ```typescript
-import { Client, AddressType } from "@xkore/dice";
+import { createSocket } from "dgram";
+import { Stack, AddressType, DiceAddress } from "@xkore/dice";
 
-const diceClient = new Client({
-	[AddressType.IPV6]: {
-		socket: ipv6Socket,
-	},
-	[AddressType.IPV4]: {
-		socket: ipv4Socket,
-	},
+// Create UDP sockets
+const ipv6Socket = createSocket("udp6");
+const ipv4Socket = createSocket("udp4");
+
+// Create DICE stack
+const stack = new Stack({
+  [AddressType.IPv6]: {
+    socket: ipv6Socket,
+    bootstrapAddresses: [], // Initial peers for your network
+  },
+  [AddressType.IPv4]: {
+    socket: ipv4Socket,
+    bootstrapAddresses: [],
+  },
 });
 
-// Open connection and discover peers
-await diceClient.open();
+// Open stack
+await stack.open();
 
-const diceAddress = diceClient.diceAddress;
+// Get your DICE address to share with peers
+const myAddress = stack.diceAddress;
+console.log("My address:", myAddress.toString());
 
-diceClient.on("diceAddress", (diceAddress) => {
-	// Dice address has been updated
+// Listen for incoming messages
+stack.events.on("message", (payload, context) => {
+  console.log("Received from:", context.remoteAddress.toString());
+  console.log("Data:", new TextDecoder().decode(payload));
 });
 
-diceClient.on("message", (message, remoteInfo) => {
-	// Raw messages from all sockets, including DICE messages so make sure you filter them out or filter for your protocols messages.
+// Listen for address updates
+stack.events.on("diceAddress", (address) => {
+  console.log("Address updated:", address.toString());
+  // Share updated address with your peers
 });
 
-// Send message to another DICE address
-await diceClient.send(targetAddress, message);
+// Listen for coordinator depletion
+stack.events.on("coordinatorPoolDepleted", () => {
+  // Send messages to known peers to discover new coordinators
+});
+
+// Send to a peer
+const peerAddress = DiceAddress.fromString("dice://...");
+const message = new TextEncoder().encode("Hello!");
+await stack.send(peerAddress, message);
 
 // Clean shutdown
-await diceClient.close();
+stack.close();
 ```
+
+## Architecture
+
+### Core Components
+
+**Envelope**: Transport format wrapping all UDP traffic
+- Magic bytes identify DICE traffic: `0xdd11cc33`
+- Contains optional reflection metadata for address discovery
+- Wraps both DICE control messages and application payloads
+- 6-24 byte overhead per packet
+
+**Message**: DICE control protocol
+- `NOOP` - Creates NAT binding
+- `PING/PONG` - Reachability testing with reflection
+- `RELAY_BIND_REQUEST` - Request coordinator assistance
+- `BIND_REQUEST` - Coordinator signals target peer
+- `BIND` - Confirms NAT binding established
+
+**Layer**: Single-stack UDP wrapper (IPv4 or IPv6)
+- Manages one UDP socket
+- Parses Envelopes and manages NAT bindings
+- Discovers coordinators from network traffic
+- Emits events: buffer → envelope → message/diceMessage
+
+**Stack**: Multi-stack aggregator
+- Manages both IPv4 and IPv6 layers
+- Aggregates events from all layers
+- Primary API for applications
+- Generates and updates DiceAddress
+
+### Event Flow
+
+```
+UDP packet received
+  ↓
+buffer event (raw bytes)
+  ↓
+Parse Envelope → envelope event
+  ↓
+Check payload magic bytes
+  ↓
+├─ DICE control → diceMessage event
+└─ Application data → message event
+```
+
+### Coordinator Discovery
+
+DICE discovers coordinators from your network traffic:
+
+1. Your application sends messages to peers
+2. DICE wraps traffic in Envelopes with reflection metadata
+3. When receiving from a peer without existing NAT binding:
+   - Tests reachability with PING
+   - Adds successful peers to coordinator pool (max 9)
+4. Coordinators assist with NAT traversal to new peers
+
+Configure `excludeFromCoordinators` to prevent specific peers from becoming coordinators.
+
+### Public Detection
+
+DICE detects when you're publicly reachable:
+
+- Tracks unsolicited traffic (from peers without cached bindings)
+- If unsolicited traffic received within 60 seconds: publicly reachable
+- Public peers remove coordinators from their DiceAddress
+- Emits events when reachability status changes
+
+### NAT Traversal Flow
+
+1. Application sends to peer B
+2. DICE wraps message in Envelope, sends NOOP to B
+3. If no direct connection: sends RELAY_BIND_REQUEST to B's coordinators
+4. Coordinator forwards BIND_REQUEST to B
+5. B creates binding (NOOP) and confirms (BIND)
+6. Direct connection established, cached for 20-25 seconds
+7. Application messages flow directly via UDP
 
 ## API Documentation
 
-### Client Constructor
+### Stack Constructor
 
-Creates a new DICE client for P2P networking. The client manages dual-stack IPv4/IPv6 overlays for maximum connectivity. At minimum, provide at least one socket (IPv4 or IPv6). For best results, provide both to enable dual-stack operation.
+Creates a DICE stack for NAT traversal. Manages dual-stack IPv4/IPv6 layers.
 
 **Parameters:**
 
-- `options` (optional) - Configuration options
-    - `[AddressType.IPv4]` - IPv4 configuration with UDP socket
-    - `[AddressType.IPv6]` - IPv6 configuration with UDP socket
-    - `cacheSize` - Maximum cache entries for NAT bindings (default: 10,000)
-    - `concurrency` - Concurrent operations during peer discovery (default: 3)
-    - `depth` - Min/max depth for iterative peer discovery (default: {minimum: 3, maximum: 10})
-    - `healthcheckIntervalMs` - Interval between health checks in ms (default: 60,000)
-    - `relayCount` - Number of coordinators to use for NAT traversal (default: 9)
-    - `logger` - Optional logger instance for debugging
+- `options` - Configuration
+  - `[AddressType.IPv4]` - IPv4 layer configuration
+    - `socket` - UDP socket from `dgram.createSocket("udp4")`
+    - `bootstrapAddresses` - Array of initial peer addresses
+    - `excludeFromCoordinators` - Set of address keys to exclude
+    - `isAddressValidationDisabled` - Disable validation (testing only)
+    - `isPrefixFilteringDisabled` - Disable prefix filtering (testing only)
+  - `[AddressType.IPv6]` - IPv6 layer configuration (same options)
+  - `cacheSize` - Max NAT binding cache entries (default: 10000)
+  - `coordinatorCount` - Max coordinators per layer (default: 9)
+  - `healthcheckIntervalMs` - Health check interval (default: 60000)
+  - `logger` - Optional logger for debugging
 
-**Examples:**
+**Example:**
 
 ```typescript
 import { createSocket } from "dgram";
-import { Client, AddressType } from "@xkore/dice";
+import { Stack, AddressType, Ipv4Address } from "@xkore/dice";
 
-// Dual-stack client (recommended)
-const client = new Client({
-	[AddressType.IPv4]: { socket: createSocket("udp4") },
-	[AddressType.IPv6]: { socket: createSocket("udp6") },
-});
+const bootstrapPeers = [
+  new Ipv4Address({ ip: new Uint8Array([1, 2, 3, 4]), port: 8080 }),
+];
 
-// Single-stack IPv4 only
-const ipv4Client = new Client({
-	[AddressType.IPv4]: { socket: createSocket("udp4") },
+const stack = new Stack({
+  [AddressType.IPv4]: {
+    socket: createSocket("udp4"),
+    bootstrapAddresses: bootstrapPeers,
+  },
+  [AddressType.IPv6]: {
+    socket: createSocket("udp6"),
+    bootstrapAddresses: [],
+  },
 });
 ```
 
 ---
 
-### client.open(isBootstrapping?)
+### stack.open()
 
-Opens the DICE client and establishes network connectivity.
+Opens the stack and starts NAT traversal operations.
 
-This method performs several critical operations:
+This method:
+1. Opens all configured layers (IPv4/IPv6)
+2. Sets up event forwarding from layers to stack
+3. Starts healthcheck intervals
+4. Emits 'open' event when ready
 
-1. Initializes IPv4/IPv6 overlays based on provided sockets
-2. Discovers external IP addresses through peer reflection
-3. Bootstraps coordinator lists from the network (if enabled)
-4. Starts health check intervals to maintain peer pools
-5. Emits 'open' event when ready
+Send messages to bootstrap peers after opening to discover coordinators.
 
-After calling this method, the client will automatically:
-
-- Maintain pools of coordinator peers for NAT traversal
-- Keep external address information up-to-date
-- Handle incoming messages and connectivity requests
-
-**Parameters:**
-
-- `isBootstrapping` (boolean, optional) - Whether to discover coordinators from bootstrap nodes (default: true). Set to false when running your own bootstrap node.
-
-**Returns:** Promise that resolves when the client is fully operational and ready to send/receive
+**Returns:** Promise that resolves when stack is operational
 
 **Example:**
 
 ```typescript
-await client.open();
-console.log("Client ready at:", client.diceAddress.toString());
-
-// Listen for address updates
-client.events.on("diceAddress", (address) => {
-	console.log("Address updated:", address.toString());
-});
+await stack.open();
+console.log("Stack ready");
+console.log("Address:", stack.diceAddress.toString());
 ```
 
 ---
 
-### client.send(diceAddress, buffer, addressType?, options?)
+### stack.send(diceAddress, buffer, addressType?, options?)
 
-Sends a message to another peer via their DICE address.
+Sends application payload to peer via DICE address.
 
-This is the primary method for peer-to-peer communication. It handles:
-
-- Automatic NAT traversal using coordinators from the target address
-- Dual-stack connectivity (prefers IPv6, falls back to IPv4)
-- Connection establishment for first-time peers
-- Direct UDP delivery once connectivity is established
-
-The method will coordinate with the target's embedded coordinator peers to establish direct connectivity if needed. Once a direct connection exists, messages are sent via UDP without coordination overhead.
+Handles:
+- Envelope wrapping
+- Automatic NAT traversal via coordinators
+- Dual-stack (prefers IPv6, falls back to IPv4)
+- Connection establishment
 
 **Parameters:**
 
-- `diceAddress` - Target peer's DICE address (obtained from them out-of-band)
-- `buffer` - Message payload as Uint8Array (use TextEncoder for strings)
-- `addressType` (optional) - Force specific stack (AddressType.IPv4 or IPv6)
-- `options` (optional) - Configuration
-    - `timeoutMs` - Timeout for send operation in milliseconds
-    - `retryCount` - Number of retry attempts on failure
+- `diceAddress` - Target peer's DICE address
+- `buffer` - Application payload as Uint8Array
+- `addressType` - Optional: force IPv4 or IPv6
+- `options` - Optional send options
 
-**Returns:** Promise that resolves when message is successfully sent
-
-**Throws:** DiceError when send fails after retries or no valid overlays available
-
-**Examples:**
-
-```typescript
-// Send a text message
-const message = new TextEncoder().encode("Hello, peer!");
-await client.send(targetAddress, message);
-
-// Send binary data
-const data = new Uint8Array([1, 2, 3, 4]);
-await client.send(targetAddress, data);
-
-// Force IPv4 with custom timeout
-await client.send(targetAddress, message, AddressType.IPv4, {
-	timeoutMs: 5000,
-	retryCount: 3,
-});
-```
-
----
-
-### client.diceAddress
-
-The current DICE address of this client.
-
-This address is a self-contained connectivity descriptor that includes:
-
-- External IPv4/IPv6 addresses and ports
-- Coordinator peer addresses for NAT traversal coordination
-- All information needed for other peers to contact you
-
-The address format is: `dice://[ipv6]:[port]/[coordinators]/[ipv4]:[port]/[coordinators]`
-
-Share this address with other peers (via your application's signaling mechanism) to enable them to send messages to you. The address updates automatically when:
-
-- External IP addresses are discovered or change
-- Coordinator lists are updated
-- Network conditions change
-
-Listen to the 'diceAddress' event to be notified of updates.
-
-**Returns:** Your current DICE address
+**Returns:** Promise that resolves when sent
 
 **Example:**
 
 ```typescript
-await client.open();
+import { DiceAddress } from "@xkore/dice";
 
-// Get the address
-const myAddress = client.diceAddress;
+const peerAddress = DiceAddress.fromString("dice://...");
+const message = new TextEncoder().encode("Hello peer!");
+
+await stack.send(peerAddress, message);
+```
+
+---
+
+### stack.diceAddress
+
+Your current DICE address. Share this with peers through your application's signaling.
+
+The address updates when:
+- External addresses are discovered
+- Coordinator pool changes
+- Public reachability status changes
+
+Listen to `diceAddress` event for updates.
+
+**Returns:** DiceAddress object
+
+**Example:**
+
+```typescript
+const myAddress = stack.diceAddress;
 console.log("Share this:", myAddress.toString());
 
-// Listen for updates
-client.events.on("diceAddress", (updatedAddress) => {
-	console.log("Address changed:", updatedAddress.toString());
-	// Share the new address with peers
+stack.events.on("diceAddress", (updated) => {
+  console.log("Address changed:", updated.toString());
 });
 ```
 
 ---
 
-### client.events
+### stack.close()
 
-Event emitter for client lifecycle and network events.
-
-**Available Events:**
-
-- `open` - Emitted when client successfully opens and is ready to send/receive
-- `close` - Emitted when client closes and all connections are terminated
-- `diceAddress` - Emitted when the DICE address changes (external IP discovered, coordinators updated)
-- `message` - Emitted when receiving application-layer messages from other peers
-- `error` - Emitted when errors occur during network operations
+Closes the stack and all layers. Stops health checks and cleans up resources.
 
 **Example:**
 
 ```typescript
-client.events.on("open", () => {
-	console.log("Client ready");
-});
+stack.close();
+```
 
-client.events.on("diceAddress", (diceAddress) => {
-	console.log("My Dice address:", diceAddress.toString());
-});
+---
 
-client.events.on("message", (message, remoteInfo) => {
-	console.log("Received:", message);
+## Events
+
+### Stack Events
+
+**buffer**: `(buffer: Uint8Array, remoteInfo: RemoteInfo) => void`
+- Raw UDP packet received before Envelope parsing
+
+**envelope**: `(envelope: Envelope, context: Layer.Context) => void`
+- Envelope parsed successfully
+
+**message**: `(payload: Uint8Array, context: Layer.Context) => void`
+- Application payload received (listen to this for your data)
+- Payload is raw Uint8Array, decode as needed
+
+**diceMessage**: `(message: Message, context: Layer.Context) => void`
+- DICE control message received (PING, PONG, BIND, etc)
+- Useful for debugging
+
+**diceAddress**: `(address: DiceAddress) => void`
+- Your DICE address changed
+- Share updated address with peers
+
+**coordinatorPoolDepleted**: `() => void`
+- Coordinator pool empty
+- Send messages to known peers to discover coordinators
+
+**open**: `() => void`
+- Stack opened successfully
+
+**close**: `() => void`
+- Stack closed
+
+**error**: `(error: unknown) => void`
+- Error occurred in DICE operations
+
+### Layer Events
+
+Layers emit the same events as Stack. Access individual layers for fine-grained control:
+
+```typescript
+const ipv4Layer = stack.layers[AddressType.IPv4];
+
+ipv4Layer?.events.on("message", (payload, context) => {
+  console.log("IPv4 message:", payload);
 });
 ```
+
+---
+
+## Advanced Usage
+
+### Excluding Coordinators
+
+Prevent specific peers from becoming coordinators:
+
+```typescript
+const excludedPeer = "c0a8010150"; // address key
+
+const stack = new Stack({
+  [AddressType.IPv4]: {
+    socket: ipv4Socket,
+    bootstrapAddresses: [],
+    excludeFromCoordinators: new Set([excludedPeer]),
+  },
+});
+```
+
+### Accessing Layers
+
+Direct access to IPv4/IPv6 layers:
+
+```typescript
+const ipv4Layer = stack.layers[AddressType.IPv4];
+const ipv6Layer = stack.layers[AddressType.IPv6];
+
+// Check external addresses
+console.log("IPv4 external:", ipv4Layer?.external?.toString());
+console.log("IPv6 external:", ipv6Layer?.external?.toString());
+
+// Check public reachability
+console.log("Public?", ipv4Layer?.isPublic);
+
+// Get coordinators
+const coordinators = ipv4Layer?.coordinators.getAll();
+```
+
+### Working with Addresses
+
+```typescript
+import {
+  DiceAddress,
+  Ipv4Address,
+  Ipv6Address,
+  Address
+} from "@xkore/dice";
+
+// Parse DICE address
+const addr = DiceAddress.fromString("dice://...");
+
+// Get components
+const ipv4 = addr.ipv4Address;
+const ipv6 = addr.ipv6Address;
+const ipv4Coordinators = addr.ipv4Coordinators;
+const ipv6Coordinators = addr.ipv6Coordinators;
+
+// Create addresses
+const ipv4Addr = new Ipv4Address({
+  ip: new Uint8Array([192, 168, 1, 1]),
+  port: 8080,
+});
+
+const ipv6Addr = new Ipv6Address({
+  ip: new Uint8Array(16), // 16 bytes
+  port: 8080,
+});
+
+// Address properties
+console.log(ipv4Addr.key); // Hex key for maps
+console.log(ipv4Addr.isPrivate); // Private IP check
+console.log(ipv4Addr.toString()); // "192.168.1.1:8080"
+```
+
+---
+
+## Regional Performance
+
+Direct connectivity rates vary by region:
+
+- **Best** (85-95%): Japan, Korea, Western Europe
+- **Moderate** (70-85%): USA/Canada, UK
+- **Challenging** (50-70%): India, mobile networks, CGNAT-heavy regions
+
+---
 
 ## Development
 
@@ -265,8 +456,8 @@ npm install
 npm run check
 
 # Run tests
-npm run unit
-npm run integration
+npm run unit        # Unit tests
+npm run integration # Integration tests
 
 # Build
 npm run build

@@ -1,7 +1,7 @@
 {
 	"name": "@xkore/dice",
-	"version": "0.3.9",
-	"description": "Distributed Interactive Connectivity Establishment",
+	"version": "1.0.0",
+	"description": "Thin NAT traversal transport layer for application overlay networks - infrastructure-free UDP hole punching",
 	"main": "./dist/index.js",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.ts",
@@ -25,7 +25,7 @@
 		"@noble/hashes": "^1.7.1",
 		"@scure/base": "^1.2.4",
 		"@types/events": "^3.0.3",
-		"bufferfy": "^3.0.5",
+		"bufferfy": "^4.0.2",
 		"events": "^3.3.0",
 		"ipaddr.js": "^2.2.0",
 		"lodash-es": "^4.17.21",

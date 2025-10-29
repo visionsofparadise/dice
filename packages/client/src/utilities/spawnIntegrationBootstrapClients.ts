@@ -1,14 +1,14 @@
 import { createSocket } from "dgram";
 import logger, { LogLevelNumbers } from "loglevel";
 import { AddressType } from "../models/Address/Type";
-import { Client } from "../models/Client";
+import { Stack } from "../models/Stack";
 import { Ipv4Address } from "../models/Ipv4Address";
 import { Ipv6Address } from "../models/Ipv6Address";
 
 logger.setLevel(process.env.LOG_LEVEL ? (parseInt(process.env.LOG_LEVEL) as LogLevelNumbers) : 5);
 
-export const spawnIntegrationBootstrapClients = async (options: Partial<Client.Options> | undefined, callback: (clients: [Client, Client, Client]) => any): Promise<void> => {
-	const clients: Array<Client> = [];
+export const spawnIntegrationBootstrapClients = async (options: Partial<Stack.Options> | undefined, callback: (stacks: [Stack, Stack, Stack]) => any): Promise<void> => {
+	const stacks: Array<Stack> = [];
 
 	try {
 		for (let i = 0; i < 3; i++) {
@@ -24,14 +24,16 @@ export const spawnIntegrationBootstrapClients = async (options: Partial<Client.O
 				socket4.bind(undefined, "127.0.0.1", () => resolve());
 			});
 
-			const client = new Client({
+			const stack = new Stack({
 				[AddressType.IPv6]: {
 					bootstrapAddresses: [],
+					isAddressValidationDisabled: true,
 					isPrefixFilteringDisabled: true,
 					socket: socket6,
 				},
 				[AddressType.IPv4]: {
 					bootstrapAddresses: [],
+					isAddressValidationDisabled: true,
 					isPrefixFilteringDisabled: true,
 					socket: socket4,
 				},
@@ -39,32 +41,32 @@ export const spawnIntegrationBootstrapClients = async (options: Partial<Client.O
 				...options,
 			});
 
-			client.overlays[AddressType.IPv6]!.external = Ipv6Address.fromAddressInfo(socket6.address());
-			client.overlays[AddressType.IPv4]!.external = Ipv4Address.fromAddressInfo(socket4.address());
+			stack.layers[AddressType.IPv6]!.external = Ipv6Address.fromAddressInfo(socket6.address());
+			stack.layers[AddressType.IPv4]!.external = Ipv4Address.fromAddressInfo(socket4.address());
 
-			clients.push(client);
+			stacks.push(stack);
 		}
 
-		for (const clientA of clients) {
-			for (const clientB of clients) {
+		for (const clientA of stacks) {
+			for (const clientB of stacks) {
 				if (clientA.diceAddress.toString() === clientB.diceAddress.toString()) continue;
 
-				clientA.overlays[AddressType.IPv6]?.coordinatorMap.set(clientB.overlays[AddressType.IPv6]?.external!.key!, clientB.overlays[AddressType.IPv6]?.external!);
-				clientA.overlays[AddressType.IPv4]?.coordinatorMap.set(clientB.overlays[AddressType.IPv4]?.external!.key!, clientB.overlays[AddressType.IPv4]?.external!);
+				clientA.layers[AddressType.IPv6]?.coordinators.getMap().set(clientB.layers[AddressType.IPv6]?.external!.key!, clientB.layers[AddressType.IPv6]?.external!);
+				clientA.layers[AddressType.IPv4]?.coordinators.getMap().set(clientB.layers[AddressType.IPv4]?.external!.key!, clientB.layers[AddressType.IPv4]?.external!);
 			}
 
-			await clientA.open(false);
-			clearInterval(clientA.overlays[AddressType.IPv6]?.healthcheckInterval);
-			clearInterval(clientA.overlays[AddressType.IPv4]?.healthcheckInterval);
+			await clientA.open();
+			clearInterval(clientA.layers[AddressType.IPv6]?.healthcheckInterval);
+			clearInterval(clientA.layers[AddressType.IPv4]?.healthcheckInterval);
 		}
 
-		await callback(clients as [Client, Client, Client]);
+		await callback(stacks as [Stack, Stack, Stack]);
 	} finally {
-		for (const client of clients) {
-			client.close();
+		for (const stack of stacks) {
+			stack.close();
 
-			for (const overlay of Object.values(client.overlays)) {
-				overlay.socket.close();
+			for (const layer of Object.values(stack.layers)) {
+				layer.socket.close();
 			}
 		}
 	}

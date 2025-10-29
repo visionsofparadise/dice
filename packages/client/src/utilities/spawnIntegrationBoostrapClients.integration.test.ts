@@ -3,7 +3,7 @@ import { spawnIntegrationBootstrapClients } from "./spawnIntegrationBootstrapCli
 import { INTEGRATION_TEST_TIMEOUT_MS } from "./spawnIntegrationClients";
 
 it(
-	"spawns integration bootstraps clients",
+	"spawns integration bootstraps stacks",
 	async () => {
 		await spawnIntegrationBootstrapClients(undefined, async (bootstrapClients) => {
 			for (const clientA of bootstrapClients) {

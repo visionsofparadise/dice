@@ -29,6 +29,8 @@ export class Cache {
 		this.map.delete(key);
 		this.map.set(key, now);
 
+		// Clean expired entries from the front of the cache
+		// Map maintains insertion order, so we can stop at the first non-expired entry
 		for (const [key, value] of this.map) {
 			if (now > value + this.ttl) {
 				this.map.delete(key);
@@ -36,7 +38,7 @@ export class Cache {
 				continue;
 			}
 
-			break;
+			break;  // Stop at first non-expired entry - all subsequent entries are newer
 		}
 
 		if (this.map.size > this.limit) {

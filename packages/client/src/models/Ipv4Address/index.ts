@@ -13,6 +13,7 @@ export namespace Ipv4Address {
 	export interface Cache {
 		buffer?: Uint8Array;
 		byteLength?: number;
+		isPrivate?: boolean;
 		key?: string;
 		prefix?: string;
 		string?: string;
@@ -65,11 +66,12 @@ export class Ipv4Address implements Ipv4Address.Properties {
 	}
 
 	get isPrivate(): boolean {
+		if (this.cache.isPrivate !== undefined) return this.cache.isPrivate;
+
 		const ip = ipaddr.fromByteArray([...this.ip]).toString();
 
-		return (
-			ip.startsWith("10.") || ip.startsWith("169.254.") || ip.startsWith("192.168.") || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip) || /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(ip)
-		);
+		return (this.cache.isPrivate =
+			ip.startsWith("10.") || ip.startsWith("169.254.") || ip.startsWith("192.168.") || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip) || /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(ip));
 	}
 
 	get key(): string {
