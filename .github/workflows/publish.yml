@@ -1,11 +1,12 @@
-name: Publish Client Package
+name: Publish Package
 
 on:
   push:
     branches: [main]
     paths:
-      - 'packages/client/**'
-      - '!packages/client/package.json'
+      - 'src/**'
+      - 'package.json'
+      - '!**/*.test.ts'
 
 jobs:
   publish:
@@ -26,19 +27,13 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: |
-          cd packages/client
-          npm run check
+        run: npm run check
 
       - name: Run unit tests
-        run: |
-          cd packages/client
-          npm run unit
+        run: npm run unit
 
       - name: Run integration tests
-        run: |
-          cd packages/client
-          npm run integration
+        run: npm run integration
 
       - name: Configure git
         run: |
@@ -47,23 +42,17 @@ jobs:
 
       - name: Bump version
         run: |
-          cd packages/client
           npm version patch --no-git-tag-version
           NEW_VERSION=$(node -p "require('./package.json').version")
-          cd ../..
-          git add packages/client/package.json package-lock.json
+          git add package.json package-lock.json
           git commit -m "chore: bump @xkore/dice to $NEW_VERSION [skip ci]"
           git tag "v$NEW_VERSION"
 
       - name: Build
-        run: |
-          cd packages/client
-          npm run build
+        run: npm run build
 
       - name: Publish to NPM
-        run: |
-          cd packages/client
-          npm publish --access public
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
