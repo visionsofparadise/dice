@@ -1,1 +1,0 @@
-export const MAGIC_BYTES = Uint8Array.from([0xdd, 0x11, 0xcc, 0x33]);
