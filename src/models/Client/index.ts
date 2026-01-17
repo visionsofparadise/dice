@@ -1,33 +1,34 @@
-import { RemoteInfo } from "dgram";
+import type { RemoteInfo } from "dgram";
 import EventEmitter from "events";
-import { Logger, wrapLogger } from "../../utilities/Logger";
-import { RequiredProperties } from "../../utilities/RequiredProperties";
-import { type SendOptions } from "../Adapter";
+import { type Logger, wrapLogger } from "../../utilities/Logger";
+import type { RequiredProperties } from "../../utilities/RequiredProperties";
 import { AddressType } from "../Address/Type";
 import { BindingCache } from "../BindingCache";
 import { DiceAddress } from "../DiceAddress";
+import type { Envelope } from "../Envelope";
 import { DiceError } from "../Error";
-import { EventEmitterOptions } from "../EventEmitter";
-import { Ipv4Address } from "../Ipv4Address";
-import { Ipv6Address } from "../Ipv6Address";
-import { Layer } from "../Layer";
+import type { EventEmitterOptions } from "../EventEmitter";
+import { IpChannel } from "../IpChannel";
+import type { Message } from "../Message";
+import type { UdpTransport } from "../UdpTransport";
 
-export namespace Stack {
+export namespace Client {
 	export interface EventMap {
 		buffer: [buffer: Uint8Array, remoteInfo: RemoteInfo];
 		close: [];
-		coordinatorPoolDepleted: [];
+		depleted: [];
 		diceAddress: [diceAddress: DiceAddress];
-		envelope: [envelope: import("../Envelope").Envelope, context: Layer.Context];
+		envelope: [envelope: Envelope, context: IpChannel.Context];
 		error: [error: unknown];
-		message: [buffer: Uint8Array, context: Layer.Context];
-		diceMessage: [message: import("../Message").Message, context: Layer.Context];
+		message: [buffer: Uint8Array, context: IpChannel.Context];
+		diceMessage: [message: Message, context: IpChannel.Context];
 		open: [];
+		reachable: [isReachable: boolean, addressType: AddressType];
 	}
 
-	export interface Options extends SendOptions, EventEmitterOptions {
-		[AddressType.IPv6]?: RequiredProperties<Layer.Options, "socket">;
-		[AddressType.IPv4]?: RequiredProperties<Layer.Options, "socket">;
+	export interface Options extends UdpTransport.SendOptions, EventEmitterOptions {
+		[AddressType.IPv6]?: RequiredProperties<IpChannel.Options, "socket">;
+		[AddressType.IPv4]?: RequiredProperties<IpChannel.Options, "socket">;
 		cacheSize: number;
 		concurrency: number;
 		depth: {
@@ -42,74 +43,74 @@ export namespace Stack {
 }
 
 /**
- * DICE Stack for peer-to-peer networking without infrastructure dependencies.
+ * DICE Client for peer-to-peer networking without infrastructure dependencies.
  *
- * Manages dual-stack IPv4/IPv6 layers and provides a high-level interface for:
+ * Manages dual-stack IPv4/IPv6 IpChannels and provides a high-level interface for:
  * - Generating your own DICE addresses
  * - Sending messages to others' DICE addresses
  * - Automatic NAT traversal and connectivity handling
  *
  * @example
  * ```typescript
- * const stack = new Stack({
+ * const client = new Client({
  *   [AddressType.IPv4]: { socket: ipv4Socket },
  *   [AddressType.IPv6]: { socket: ipv6Socket }
  * });
  *
- * await stack.open();
- * console.log("My address:", stack.diceAddress.toString());
+ * await client.open();
+ * console.log("My address:", client.diceAddress.toString());
  *
- * stack.on("diceaddress", (diceaddress) => {
+ * client.on("diceaddress", (diceaddress) => {
  *   console.log(diceAddress.toString());
  * });
  *
- * await stack.send(targetAddress, messageBuffer);
+ * await client.send(targetAddress, messageBuffer);
  * ```
  */
-export class Stack {
+export class Client {
 	static STATE = {
 		CLOSED: 0,
 		OPENED: 1,
 	} as const;
 
 	/**
-	 * Event emitter for stack lifecycle and network events.
+	 * Event emitter for client lifecycle and network events.
 	 *
 	 * Available events:
-	 * - `open`: Emitted when stack successfully opens and is ready to send/receive
-	 * - `close`: Emitted when stack closes and all connections are terminated
+	 * - `open`: Emitted when client successfully opens and is ready to send/receive
+	 * - `close`: Emitted when client closes and all connections are terminated
 	 * - `diceAddress`: Emitted when the DICE address changes (external IP discovered, coordinators updated)
 	 * - `message`: Emitted when receiving application-layer messages from other peers
 	 * - `error`: Emitted when errors occur during network operations
 	 *
 	 * @example
 	 * ```typescript
-	 * stack.events.on('open', () => {
-	 *   console.log('Stack is ready');
+	 * client.events.on('open', () => {
+	 *   console.log('Client is ready');
 	 * });
 	 *
-	 * stack.events.on('diceAddress', (diceAddress) => {
+	 * client.events.on('diceAddress', (diceAddress) => {
 	 *   console.log('My address:', diceAddress.toString());
 	 * });
 	 *
-	 * stack.events.on('message', (message, remoteInfo) => {
+	 * client.events.on('message', (message, remoteInfo) => {
 	 *   console.log('Received:', message);
 	 * });
 	 * ```
 	 */
-	public events: EventEmitter<Stack.EventMap>;
-	public logger?: Logger;
-	public options: Stack.Options;
-	public layers: {
-		[AddressType.IPv6]?: Layer;
-		[AddressType.IPv4]?: Layer;
+	public events: EventEmitter<Client.EventMap>;
+	public ipChannels: {
+		[AddressType.IPv6]?: IpChannel;
+		[AddressType.IPv4]?: IpChannel;
 	};
-	public state: Stack.State = Stack.STATE.CLOSED;
+	public logger?: Logger;
+	public options: Client.Options;
+	public state: Client.State = Client.STATE.CLOSED;
 
 	/**
-	 * Creates a new DICE stack for P2P networking.
+	 * Creates a new DICE client for P2P networking.
 	 *
-	 * The stack manages dual-stack IPv4/IPv6 layers for maximum connectivity.
+	 * The client manages dual-stack IPv4/IPv6 IpChannels for maximum connectivity.
 	 * At minimum, provide at least one socket (IPv4 or IPv6). For best results,
 	 * provide both to enable dual-stack operation.
 	 *
@@ -125,42 +126,42 @@ export class Stack {
 	 * @example
 	 * ```typescript
 	 * import { createSocket } from 'dgram';
-	 * import { Stack } from '@xkore/dice';
+	 * import { Client } from '@xkore/dice';
 	 * import { AddressType } from '@xkore/dice/models/Address';
 	 *
-	 * // Dual-stack stack (recommended)
-	 * const stack = new Stack({
+	 * // Dual-stack client (recommended)
+	 * const client = new Client({
 	 *   [AddressType.IPv4]: { socket: createSocket('udp4') },
 	 *   [AddressType.IPv6]: { socket: createSocket('udp6') }
 	 * });
 	 *
 	 * // Single-stack IPv4 only
-	 * const ipv4Client = new Stack({
+	 * const ipv4Client = new Client({
 	 *   [AddressType.IPv4]: { socket: createSocket('udp4') }
 	 * });
 	 * ```
 	 */
-	constructor(options?: Partial<Stack.Options>) {
+	constructor(options?: Partial<Client.Options>) {
 		const defaultOptions = {
 			cacheSize: BindingCache.DEFAULT_CACHE_SIZE,
-			concurrency: Layer.DEFAULT_CONCURRENCY,
-			depth: Layer.DEFAULT_DEPTH,
-			healthcheckIntervalMs: Layer.DEFAULT_HEALTHCHECK_INTERVAL_MS,
+			concurrency: IpChannel.DEFAULT_CONCURRENCY,
+			depth: IpChannel.DEFAULT_DEPTH,
+			healthcheckIntervalMs: IpChannel.DEFAULT_HEALTHCHECK_INTERVAL_MS,
 			...options,
 		};
 
 		this.events = new EventEmitter(defaultOptions);
 		this.logger = wrapLogger(defaultOptions.logger, "DICE");
 		this.options = defaultOptions;
-		this.layers = {
+		this.ipChannels = {
 			[AddressType.IPv6]: defaultOptions[AddressType.IPv6]
-				? new Layer({
+				? new IpChannel({
 						...defaultOptions,
 						...defaultOptions[AddressType.IPv6],
 					})
 				: undefined,
 			[AddressType.IPv4]: defaultOptions[AddressType.IPv4]
-				? new Layer({
+				? new IpChannel({
 						...defaultOptions,
 						...defaultOptions[AddressType.IPv4],
 					})
@@ -169,82 +170,84 @@ export class Stack {
 	}
 
 	/**
-	 * Closes the DICE stack and all underlying network connections.
+	 * Closes the DICE client and all underlying network connections.
 	 *
-	 * Gracefully shuts down both IPv4 and IPv6 layers, stops healthcheck timers,
+	 * Gracefully shuts down both IPv4 and IPv6 IpChannels, stops healthcheck timers,
 	 * and emits the 'close' event when complete.
 	 */
 	close(): void {
-		if (this.state === Stack.STATE.CLOSED) return;
+		if (this.state === Client.STATE.CLOSED) return;
 
 		this.logger?.info("Closing");
 
 		this.events.removeListener("error", this.clientListeners.errorListener);
 
 		for (const addressType of [AddressType.IPv6, AddressType.IPv4]) {
-			this.layers[addressType]?.events.removeListener("address", this.overlayListeners.addressListener);
-			this.layers[addressType]?.close();
+			this.ipChannels[addressType]?.events.removeListener("address", this.ipChannelListeners.addressListener);
+			this.ipChannels[addressType]?.close();
 		}
 
-		this.state = Stack.STATE.CLOSED;
+		this.state = Client.STATE.CLOSED;
 		this.events.emit("close");
 		this.logger?.info("Closed");
 	}
 
 	/**
-	 * Opens the DICE stack and establishes network connectivity.
+	 * Opens the DICE client and establishes network connectivity.
 	 *
 	 * This method performs several critical operations:
-	 * 1. Initializes IPv4/IPv6 layers based on provided sockets
+	 * 1. Initializes IPv4/IPv6 IpChannels based on provided sockets
 	 * 2. Discovers external IP addresses through peer reflection
 	 * 3. Bootstraps coordinator lists from the network (if enabled)
 	 * 4. Starts health check intervals to maintain peer pools
 	 * 5. Emits 'open' event when ready
 	 *
-	 * After calling this method, the stack will automatically:
+	 * After calling this method, the client will automatically:
 	 * - Maintain pools of coordinator peers for NAT traversal
 	 * - Keep external address information up-to-date
 	 * - Handle incoming messages and connectivity requests
 	 *
 	 * @param isBootstrapping - Whether to discover coordinators from bootstrap nodes (default: true).
 	 *                          Set to false when running your own bootstrap node.
-	 * @returns Promise that resolves when the stack is fully operational and ready to send/receive
+	 * @returns Promise that resolves when the client is fully operational and ready to send/receive
 	 *
 	 * @example
 	 * ```typescript
-	 * await stack.open();
-	 * console.log('Stack ready at:', stack.diceAddress.toString());
+	 * await client.open();
+	 * console.log('Client ready at:', client.diceAddress.toString());
 	 *
 	 * // Listen for address updates
-	 * stack.events.on('diceAddress', (address) => {
+	 * client.events.on('diceAddress', (address) => {
 	 *   console.log('Address updated:', address.toString());
 	 * });
 	 * ```
 	 */
-	async open(): Promise<void> {
-		if (this.state === Stack.STATE.OPENED) return;
+	open(): void {
+		if (this.state === Client.STATE.OPENED) {
+			this.logger?.debug("Client already opened");
+			return;
+		}
 
 		this.logger?.info("Opening");
 
 		this.events.on("error", this.clientListeners.errorListener);
 
-		// Set up layer event aggregation
 		for (const addressType of [AddressType.IPv6, AddressType.IPv4]) {
-			const layer = this.layers[addressType];
-			if (!layer) continue;
+			const ipChannel = this.ipChannels[addressType];
+			// Note: IpChannels auto-open on construction, no need to call ipChannel.open()
 
-			// Aggregate layer events to stack
-			layer.events.on("address", this.overlayListeners.addressListener);
-			layer.events.on("buffer", (buffer, remoteInfo) => this.events.emit("buffer", buffer, remoteInfo));
-			layer.events.on("envelope", (envelope, context) => this.events.emit("envelope", envelope, context));
-			layer.events.on("message", (buffer, context) => this.events.emit("message", buffer, context));
-			layer.events.on("diceMessage", (message, context) => this.events.emit("diceMessage", message, context));
-			layer.events.on("coordinatorPoolDepleted", () => this.events.emit("coordinatorPoolDepleted"));
+			if (!ipChannel) continue;
 
-			// Note: Layers auto-open on construction, no need to call layer.open()
+			ipChannel.events.on("address", this.ipChannelListeners.addressListener);
+			ipChannel.events.on("reachable", (isReachable) => this.events.emit("reachable", isReachable, addressType));
+			ipChannel.udpTransport.events.on("buffer", (buffer, remoteInfo) => this.events.emit("buffer", buffer, remoteInfo));
+			ipChannel.udpTransport.events.on("envelope", (envelope, context) => this.events.emit("envelope", envelope, context));
+			ipChannel.udpTransport.events.on("message", (buffer, context) => this.events.emit("message", buffer, context));
+			ipChannel.udpTransport.events.on("diceMessage", (message, context) => this.events.emit("diceMessage", message, context));
+			ipChannel.coordinators.events.on("depleted", () => this.events.emit("depleted"));
 		}
 
-		this.state = Stack.STATE.OPENED;
+		this.state = Client.STATE.OPENED;
 		this.events.emit("open");
 		this.logger?.info("Open");
 	}
@@ -258,16 +261,32 @@ export class Stack {
 	 * @param diceAddress - Target DICE address with coordinator information
 	 * @param addressType - Optional: force IPv4 or IPv6
 	 * @returns Promise that resolves when coordination is complete
-	 * @throws {DiceError} When unable to request bind (no coordinators or layers)
+	 * @throws {DiceError} When unable to request bind (no coordinators or IpChannels)
 	 */
 	async requestBind(diceAddress: DiceAddress, addressType?: AddressType): Promise<void> {
+		if (this.state !== Client.STATE.OPENED) {
+			throw new DiceError("Cannot request bind: client is not opened");
+		}
+
+		// Validate at least one valid endpoint exists
+		const hasIPv6 = diceAddress[AddressType.IPv6]?.address && this.ipChannels[AddressType.IPv6];
+		const hasIPv4 = diceAddress[AddressType.IPv4]?.address && this.ipChannels[AddressType.IPv4];
+
+		if (!hasIPv6 && !hasIPv4) {
+			throw new DiceError(
+				`Unable to request bind: no compatible IpChannels. ` +
+					`DiceAddress: ${diceAddress.toString()}, ` +
+					`Client IpChannels: ${this.ipChannels[AddressType.IPv6] ? "IPv6" : "no IPv6"}, ${this.ipChannels[AddressType.IPv4] ? "IPv4" : "no IPv4"}`,
+			);
+		}
+
 		for (const type of addressType ? [addressType] : [AddressType.IPv6, AddressType.IPv4]) {
 			const endpoint = diceAddress[type];
-			const layer = this.layers[type];
+			const ipChannel = this.ipChannels[type];
 
-			if (!endpoint?.address || !endpoint.coordinators?.length || !layer) continue;
+			if (!endpoint?.address || !endpoint.coordinators?.length || !ipChannel) continue;
 
-			await layer.requestBind(endpoint.address, endpoint.coordinators);
+			await ipChannel.protocol.requestBind(endpoint.address, endpoint.coordinators);
 
 			return;
 		}
@@ -290,53 +309,69 @@ export class Stack {
 	 *
 	 * @param diceAddress - Target peer's DICE address (obtained from them out-of-band)
 	 * @param buffer - Message payload as Uint8Array (use TextEncoder for strings)
-	 * @param addressType - Optional: force specific stack (AddressType.IPv4 or IPv6)
+	 * @param addressType - Optional: force specific address family (AddressType.IPv4 or IPv6)
 	 * @param options - Optional configuration
 	 * @param options.timeoutMs - Timeout for send operation in milliseconds
 	 * @param options.retryCount - Number of retry attempts on failure
 	 * @returns Promise that resolves when message is successfully sent
-	 * @throws {DiceError} When send fails after retries or no valid layers available
+	 * @throws {DiceError} When send fails after retries or no valid IpChannels available
 	 *
 	 * @example
 	 * ```typescript
 	 * // Send a text message
 	 * const message = new TextEncoder().encode('Hello, peer!');
-	 * await stack.send(targetAddress, message);
+	 * await client.send(targetAddress, message);
 	 *
 	 * // Send binary data
 	 * const data = new Uint8Array([1, 2, 3, 4]);
-	 * await stack.send(targetAddress, data);
+	 * await client.send(targetAddress, data);
 	 *
 	 * // Force IPv4 with custom timeout
-	 * await stack.send(targetAddress, message, AddressType.IPv4, {
+	 * await client.send(targetAddress, message, AddressType.IPv4, {
 	 *   timeoutMs: 5000,
 	 *   retryCount: 3
 	 * });
 	 * ```
 	 */
-	async send(diceAddress: DiceAddress, buffer: Uint8Array, addressType?: AddressType, options?: SendOptions): Promise<void> {
+	async send(diceAddress: DiceAddress, buffer: Uint8Array, addressType?: AddressType, options?: UdpTransport.SendOptions): Promise<void> {
+		if (this.state !== Client.STATE.OPENED) {
+			throw new DiceError("Cannot send: client is not opened");
+		}
+
+		// Validate at least one valid endpoint exists
+		const hasIPv6 = diceAddress[AddressType.IPv6]?.address && this.ipChannels[AddressType.IPv6];
+		const hasIPv4 = diceAddress[AddressType.IPv4]?.address && this.ipChannels[AddressType.IPv4];
+
+		if (!hasIPv6 && !hasIPv4) {
+			throw new DiceError(
+				`Unable to send: no compatible IpChannels. ` +
+					`DiceAddress: ${diceAddress.toString()}, ` +
+					`Client IpChannels: ${this.ipChannels[AddressType.IPv6] ? "IPv6" : "no IPv6"}, ${this.ipChannels[AddressType.IPv4] ? "IPv4" : "no IPv4"}`,
+			);
+		}
+
 		for (const type of addressType ? [addressType] : [AddressType.IPv6, AddressType.IPv4]) {
 			const endpoint = diceAddress[type];
-			const layer = this.layers[type];
+			const layer = this.ipChannels[type];
 
 			if (!endpoint?.address || !layer) continue;
 
 			if (endpoint.coordinators?.length) {
-				await layer.requestBind(endpoint.address, endpoint.coordinators);
+				await layer.protocol.requestBind(endpoint.address, endpoint.coordinators);
 			}
 
-			await layer.adapter.send(buffer, endpoint.address, options);
+			await layer.udpTransport.send(buffer, endpoint.address, options);
 
 			return;
 		}
 
 		// If we get here, nothing was sent
 		throw new DiceError(
-			`Unable to send: no compatible layers available. ` +
+			`Unable to send: no compatible IpChannels available. ` +
 				`DiceAddress has ${diceAddress[AddressType.IPv6] ? "IPv6" : "no IPv6"}, ` +
 				`${diceAddress[AddressType.IPv4] ? "IPv4" : "no IPv4"}. ` +
-				`Stack has ${this.layers[AddressType.IPv6] ? "IPv6" : "no IPv6"}, ` +
-				`${this.layers[AddressType.IPv4] ? "IPv4" : "no IPv4"} layer(s).`
+				`Client has ${this.ipChannels[AddressType.IPv6] ? "IPv6" : "no IPv6"}, ` +
+				`${this.ipChannels[AddressType.IPv4] ? "IPv4" : "no IPv4"} IpChannel(s).`,
 		);
 	}
 
@@ -346,16 +381,16 @@ export class Stack {
 		},
 	};
 
-	overlayListeners = {
+	ipChannelListeners = {
 		addressListener: () => {
 			this.events.emit("diceAddress", this.diceAddress);
 		},
 	};
 
-	// Socket listeners removed - layer events are aggregated in stack.open()
+	// Socket listeners removed - IpChannel events are aggregated in client.open()
 
 	/**
-	 * The current DICE address of this stack.
+	 * The current DICE address of this client.
 	 *
 	 * This address is a self-contained connectivity descriptor that includes:
 	 * - External IPv4/IPv6 addresses and ports
@@ -376,38 +411,23 @@ export class Stack {
 	 *
 	 * @example
 	 * ```typescript
-	 * await stack.open();
+	 * await client.open();
 	 *
 	 * // Get the address
-	 * const myAddress = stack.diceAddress;
+	 * const myAddress = client.diceAddress;
 	 * console.log('Share this:', myAddress.toString());
 	 *
 	 * // Listen for updates
-	 * stack.events.on('diceAddress', (updatedAddress) => {
+	 * client.events.on('diceAddress', (updatedAddress) => {
 	 *   console.log('Address changed:', updatedAddress.toString());
 	 *   // Share the new address with peers
 	 * });
 	 * ```
 	 */
 	get diceAddress(): DiceAddress {
-		const ipv6Overlay = this.layers[AddressType.IPv6];
-		const ipv4Overlay = this.layers[AddressType.IPv4];
-
 		return new DiceAddress({
-			[AddressType.IPv6]:
-				ipv6Overlay?.external instanceof Ipv6Address
-					? {
-							address: ipv6Overlay.external,
-							coordinators: !ipv6Overlay.isReachable ? (ipv6Overlay.coordinators.list() as Array<Ipv6Address>) : undefined,
-						}
-					: undefined,
-			[AddressType.IPv4]:
-				ipv4Overlay?.external instanceof Ipv4Address
-					? {
-							address: ipv4Overlay.external,
-							coordinators: !ipv4Overlay?.isReachable ? (ipv4Overlay.coordinators.list() as Array<Ipv4Address>) : undefined,
-						}
-					: undefined,
+			[AddressType.IPv6]: this.ipChannels[AddressType.IPv6]?.address as DiceAddress[AddressType.IPv6],
+			[AddressType.IPv4]: this.ipChannels[AddressType.IPv4]?.address as DiceAddress[AddressType.IPv4],
 		});
 	}
 }

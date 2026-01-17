@@ -24,7 +24,9 @@
 	"author": "Matt Cavender",
 	"license": "ISC",
 	"scripts": {
-		"check": "tsc --noEmit",
+		"check": "concurrently \"eslint . --cache\" \"tsc --noEmit\"",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
 		"unit": "vitest run unit",
 		"integration": "vitest run integration",
 		"build": "tsup src/index.ts --tsconfig tsconfig.build.json --format esm,cjs --dts --treeshake"
@@ -42,6 +44,7 @@
 	"devDependencies": {
 		"@types/lodash-es": "^4.17.12",
 		"@types/node": "^22.7.4",
+		"concurrently": "^9.2.1",
 		"loglevel": "^1.9.2",
 		"source-map-support": "^0.5.21",
 		"ts-node": "^10.9.2",

@@ -1,5 +1,5 @@
 import ipaddr from "ipaddr.js";
-import { Address } from "../models/Address";
+import type { Address } from "../models/Address";
 import { AddressType } from "../models/Address/Type";
 
 /**
@@ -73,7 +73,7 @@ export const isValidPublicAddress = (address: Address): boolean => {
 
 			return true;
 		}
-	} catch (error) {
+	} catch {
 		// If parsing fails, reject the address
 		return false;
 	}

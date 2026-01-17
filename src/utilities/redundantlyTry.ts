@@ -53,9 +53,8 @@ export const redundantlyTry = async <T>(
 	throw lastError;
 };
 
-const delay = (ms: number, signal?: AbortSignal): Promise<void> => {
-	return new Promise((resolve, reject) => {
-		if (signal?.aborted) return reject(new Error("Aborted"));
+const delay = (ms: number, signal?: AbortSignal): Promise<void> => new Promise((resolve, reject) => {
+		if (signal?.aborted) { reject(new Error("Aborted")); return; }
 
 		const timeout = setTimeout(() => {
 			signal?.removeEventListener("abort", abortListener);
@@ -69,4 +68,3 @@ const delay = (ms: number, signal?: AbortSignal): Promise<void> => {
 
 		signal?.addEventListener("abort", abortListener);
 	});
-};

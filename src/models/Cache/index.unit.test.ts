@@ -1,4 +1,5 @@
 import { setTimeout } from "timers/promises";
+import { describe, expect, it } from "vitest";
 import { Cache } from ".";
 
 describe("Cache", () => {

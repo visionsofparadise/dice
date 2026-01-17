@@ -1,15 +1,15 @@
-import { RequiredProperties } from "../../utilities/RequiredProperties";
-import { Adapter } from "../Adapter";
-import { Address } from "../Address";
+import type { RequiredProperties } from "../../utilities/RequiredProperties";
+import type { Address } from "../Address";
 import { Cache } from "../Cache";
-import { Envelope } from "../Envelope";
+import type { Envelope } from "../Envelope";
+import type { UdpTransport } from "../UdpTransport";
 
 export namespace BindingCache {
 	export interface Options {
-		adapter: Adapter;
 		bindInTtlMs?: number;
 		bindOutTtlMs?: number;
 		cacheSize?: number;
+		udpTransport: UdpTransport;
 	}
 }
 
@@ -20,12 +20,12 @@ export namespace BindingCache {
  * - Inbound: 25s (peer → us)
  * - Outbound: 20s (us → peer)
  *
- * Automatically establishes inbound bindings by listening to adapter envelope events.
+ * Automatically establishes inbound bindings by listening to udpTransport envelope events.
  *
  * @example
  * ```typescript
  * const bindings = new BindingCache({
- *   adapter,
+ *   udpTransport,
  *   bindInTtlMs: 25_000,
  *   bindOutTtlMs: 20_000,
  *   cacheSize: 10_000
@@ -44,7 +44,7 @@ export class BindingCache {
 	private relayBinds: Cache;
 	private _external?: Address;
 
-	constructor(options: RequiredProperties<BindingCache.Options, "adapter">) {
+	constructor(options: RequiredProperties<BindingCache.Options, "udpTransport">) {
 		const defaultOptions = {
 			bindInTtlMs: BindingCache.DEFAULT_BIND_IN_TTL_MS,
 			bindOutTtlMs: BindingCache.DEFAULT_BIND_OUT_TTL_MS,
@@ -54,12 +54,10 @@ export class BindingCache {
 
 		this.bindIn = new Cache(defaultOptions.bindInTtlMs, defaultOptions.cacheSize);
 		this.bindOut = new Cache(defaultOptions.bindOutTtlMs, defaultOptions.cacheSize);
-		// Relay binds use same TTL as bindOut since they track relayed connections
 		this.relayBinds = new Cache(defaultOptions.bindOutTtlMs, defaultOptions.cacheSize);
 
-		// Listen to adapter events to automatically establish bindings
-		options.adapter.events.on("envelope", this.handleEnvelope);
-		options.adapter.events.on("send", this.handleSend);
+		options.udpTransport.events.on("envelope", this.handleEnvelope);
+		options.udpTransport.events.on("send", this.handleSend);
 	}
 
 	get external(): Address | undefined {
@@ -70,17 +68,15 @@ export class BindingCache {
 		this._external = address;
 	}
 
-	private handleEnvelope = (_envelope: Envelope, context: Adapter.Context) => {
+	private handleEnvelope = (_envelope: Envelope, context: UdpTransport.Context) => {
 		const remoteAddress = context.remoteAddress;
 
-		// Establish inbound binding
 		if (this._external) {
 			this.establishInboundBinding(remoteAddress.key, this._external.key);
 		}
 	};
 
 	private handleSend = (_buffer: Uint8Array, address: Address) => {
-		// Establish outbound binding
 		if (this._external) {
 			this.establishOutboundBinding(this._external.key, address.key);
 		}

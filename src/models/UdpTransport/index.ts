@@ -1,25 +1,25 @@
-import { RemoteInfo, Socket as UdpSocket } from "dgram";
+import type { RemoteInfo, Socket as UdpSocket } from "dgram";
 import EventEmitter from "events";
 import ipaddr from "ipaddr.js";
 import { compare } from "uint8array-tools";
 import { MAGIC_BYTES } from "../../utilities/magicBytes";
 import { redundantlyTry } from "../../utilities/redundantlyTry";
-import { RequiredProperties } from "../../utilities/RequiredProperties";
+import type { RequiredProperties } from "../../utilities/RequiredProperties";
 import { Address } from "../Address";
 import { Envelope } from "../Envelope";
-import { VERSION as ENVELOPE_VERSION, EnvelopeCodec } from "../Envelope/Codec";
+import { EnvelopeCodec, EnvelopeVersion } from "../Envelope/Codec";
 import { DiceError } from "../Error";
-import { EventEmitterOptions } from "../EventEmitter";
-import { Message } from "../Message";
-import { VERSION as MESSAGE_VERSION, MessageCodec } from "../Message/Codec";
+import type { EventEmitterOptions } from "../EventEmitter";
+import type { Message } from "../Message";
+import { MessageCodec, MessageVersion } from "../Message/Codec";
 
-export namespace Adapter {
+export namespace UdpTransport {
 	export interface EventMap {
 		send: [buffer: Uint8Array, address: Address];
 		buffer: [buffer: Uint8Array, remoteInfo: RemoteInfo];
-		envelope: [envelope: Envelope, context: Adapter.Context];
-		message: [buffer: Uint8Array, context: Adapter.PayloadContext];
-		diceMessage: [message: Message, context: Adapter.PayloadContext];
+		envelope: [envelope: Envelope, context: UdpTransport.Context];
+		message: [buffer: Uint8Array, context: UdpTransport.PayloadContext];
+		diceMessage: [message: Message, context: UdpTransport.PayloadContext];
 		error: [error: unknown];
 		open: [];
 		close: [];
@@ -27,7 +27,7 @@ export namespace Adapter {
 
 	export interface Options extends EventEmitterOptions {
 		filter?: (buffer: Uint8Array, remoteAddress: Address) => boolean;
-		socket: Adapter.Socket;
+		socket: UdpTransport.Socket;
 		retryCount?: number;
 	}
 
@@ -44,11 +44,11 @@ export namespace Adapter {
 	export type Socket = Pick<UdpSocket, "address" | "close" | "on" | "removeListener" | "send" | "unref">;
 
 	export type State = 0 | 1;
-}
 
-export interface SendOptions {
-	retryCount?: number;
-	signal?: AbortSignal;
+	export interface SendOptions {
+		retryCount?: number;
+		signal?: AbortSignal;
+	}
 }
 
 /**
@@ -59,17 +59,17 @@ export interface SendOptions {
  *
  * @example
  * ```typescript
- * const adapter = new Adapter({ socket, local });
- * await adapter.open();
+ * const udpTransport = new UdpTransport({ socket, local });
+ * await udpTransport.open();
  *
- * adapter.events.on("message", (payload, context) => {
+ * udpTransport.events.on("message", (payload, context) => {
  *   console.log("Received application data");
  * });
  *
- * await adapter.send(payload, targetAddress);
+ * await udpTransport.send(payload, targetAddress);
  * ```
  */
-export class Adapter {
+export class UdpTransport {
 	static STATE = {
 		CLOSED: 0,
 		OPENED: 1,
@@ -77,15 +77,15 @@ export class Adapter {
 
 	static readonly DEFAULT_RETRY_COUNT = 3;
 
-	public events: EventEmitter<Adapter.EventMap>;
+	public events: EventEmitter<UdpTransport.EventMap>;
 	public local: Address;
-	public options: Adapter.Options;
-	public socket: Adapter.Socket;
-	public state: Adapter.State = Adapter.STATE.CLOSED;
+	public options: UdpTransport.Options;
+	public socket: UdpTransport.Socket;
+	public state: UdpTransport.State = UdpTransport.STATE.CLOSED;
 
-	constructor(options: RequiredProperties<Adapter.Options, "socket">) {
+	constructor(options: RequiredProperties<UdpTransport.Options, "socket">) {
 		this.options = {
-			retryCount: Adapter.DEFAULT_RETRY_COUNT,
+			retryCount: UdpTransport.DEFAULT_RETRY_COUNT,
 			...options,
 		};
 
@@ -94,7 +94,7 @@ export class Adapter {
 		this.socket = options.socket;
 
 		this.socket.on("message", this.socketListeners.messageListener);
-		this.state = Adapter.STATE.OPENED;
+		this.state = UdpTransport.STATE.OPENED;
 		this.events.emit("open");
 	}
 
@@ -102,10 +102,10 @@ export class Adapter {
 	 * Closes the adapter and removes socket listeners.
 	 */
 	close(): void {
-		if (this.state === Adapter.STATE.CLOSED) return;
+		if (this.state === UdpTransport.STATE.CLOSED) return;
 
 		this.socket.removeListener("message", this.socketListeners.messageListener);
-		this.state = Adapter.STATE.CLOSED;
+		this.state = UdpTransport.STATE.CLOSED;
 		this.events.emit("close");
 	}
 
@@ -113,9 +113,9 @@ export class Adapter {
 	 * Sends payload to address, wrapped in Envelope with reflection.
 	 * Always includes target address as reflectionAddress.
 	 */
-	async send(payload: Uint8Array, address: Address, options?: SendOptions): Promise<void> {
-		if (this.state !== Adapter.STATE.OPENED) {
-			throw new DiceError("Cannot send: adapter is not opened");
+	async send(payload: Uint8Array, address: Address, options?: UdpTransport.SendOptions): Promise<void> {
+		if (this.state !== UdpTransport.STATE.OPENED) {
+			throw new DiceError("Cannot send: udpTransport is not opened");
 		}
 
 		const envelope = new Envelope({
@@ -129,13 +129,16 @@ export class Adapter {
 
 		await redundantlyTry(
 			async () => {
-				if (this.state !== Adapter.STATE.OPENED) {
+				if (this.state !== UdpTransport.STATE.OPENED) {
 					throw new DiceError("Cannot send: adapter is not opened");
 				}
 
 				await new Promise<void>((resolve, reject) => {
 					this.socket.send(buffer, address.port, ipaddr.fromByteArray([...address.ip.values()]).toString(), (error) => {
-						if (error) return reject(error);
+						if (error) {
+							reject(error);
+							return;
+						}
 						resolve();
 					});
 				});
@@ -144,12 +147,24 @@ export class Adapter {
 				retryCount: options?.retryCount ?? this.options.retryCount ?? 3,
 				delayMs: 100,
 				signal: options?.signal,
-				shouldRetry: (error: any) => {
-					// Emit error event unless it's a socket not running error
-					if (error?.code !== "ERR_SOCKET_DGRAM_NOT_RUNNING") {
-						this.events.emit("error", error);
+				shouldRetry: (error: unknown) => {
+					// Don't retry if adapter is closed
+					if (error instanceof DiceError && error.message.includes("not opened")) {
+						return false;
 					}
-					// Always retry
+
+					// Don't retry on abort
+					if (error instanceof Error && (error.message === "Aborted" || error.name === "AbortError")) {
+						return false;
+					}
+
+					// Retry network errors (socket not running)
+					if (error instanceof Error && "code" in error && error.code === "ERR_SOCKET_DGRAM_NOT_RUNNING") {
+						return true;
+					}
+
+					// Emit and retry other errors
+					this.events.emit("error", error);
 					return true;
 				},
 			}
@@ -160,16 +175,16 @@ export class Adapter {
 	 * Handles incoming UDP buffer.
 	 * Checks magic bytes, parses Envelope, emits events.
 	 */
-	async handleBuffer(buffer: Uint8Array, context: RequiredProperties<Adapter.Context, "remoteInfo">): Promise<void> {
+	handleBuffer(buffer: Uint8Array, context: RequiredProperties<UdpTransport.Context, "remoteInfo">): void {
 		try {
-			if (this.state !== Adapter.STATE.OPENED) return;
+			if (this.state !== UdpTransport.STATE.OPENED) return;
 
 			this.events.emit("buffer", buffer, context.remoteInfo);
 
 			if (compare(buffer.subarray(0, MAGIC_BYTES.byteLength), MAGIC_BYTES) !== 0) return;
 
 			const version = buffer.at(MAGIC_BYTES.byteLength);
-			if (version === undefined || version > ENVELOPE_VERSION.V1) return;
+			if (version === undefined || version > (EnvelopeVersion.V1 as number)) return;
 
 			const remoteAddress = Address.fromAddressInfo(context.remoteInfo);
 			if (remoteAddress.type !== this.local.type) return;
@@ -178,7 +193,7 @@ export class Adapter {
 
 			const envelope = EnvelopeCodec.decode(buffer);
 
-			const nextContext: Adapter.Context = {
+			const nextContext: UdpTransport.Context = {
 				buffer,
 				remoteInfo: context.remoteInfo,
 				remoteAddress,
@@ -186,7 +201,7 @@ export class Adapter {
 
 			this.events.emit("envelope", envelope, nextContext);
 
-			await this.handleEnvelope(envelope, nextContext);
+			this.handleEnvelope(envelope, nextContext);
 		} catch (error) {
 			this.events.emit("error", error);
 		}
@@ -196,15 +211,15 @@ export class Adapter {
 	 * Handles parsed Envelope.
 	 * Checks payload magic bytes to route to message or diceMessage.
 	 */
-	async handleEnvelope(envelope: Envelope, context: RequiredProperties<Adapter.Context, "buffer" | "remoteInfo" | "remoteAddress">): Promise<void> {
+	handleEnvelope(envelope: Envelope, context: RequiredProperties<UdpTransport.Context, "buffer" | "remoteInfo" | "remoteAddress">): void {
 		try {
-			if (this.state !== Adapter.STATE.OPENED) return;
+			if (this.state !== UdpTransport.STATE.OPENED) return;
 
 			const isDiceMessage = compare(envelope.payload.subarray(0, MAGIC_BYTES.byteLength), MAGIC_BYTES) === 0;
 
 			if (isDiceMessage) {
 				const version = envelope.payload.at(MAGIC_BYTES.byteLength);
-				if (version === undefined || version > MESSAGE_VERSION.V0) return;
+				if (version === undefined || version > (MessageVersion.V0 as number)) return;
 
 				const message = MessageCodec.decode(envelope.payload);
 
@@ -216,7 +231,6 @@ export class Adapter {
 			this.events.emit("error", error);
 		}
 	}
-
 
 	private socketListeners = {
 		messageListener: (buffer: Uint8Array, remoteInfo: RemoteInfo) => {

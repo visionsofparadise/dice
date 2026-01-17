@@ -1,11 +1,10 @@
 import { hex } from "@scure/base";
-import { RemoteInfo } from "dgram";
+import type { RemoteInfo } from "dgram";
 import ipaddr from "ipaddr.js";
-import { AddressInfo } from "net";
+import type { AddressInfo } from "net";
 import { AddressType } from "../Address/Type";
 import { DiceError } from "../Error";
-import { Ipv4AddressCodec, Ipv4AddressProperties } from "./Codec";
-import { mockAddress } from "./methods/mock";
+import { Ipv4AddressCodec, type Ipv4AddressProperties } from "./Codec";
 
 export namespace Ipv4Address {
 	export interface Properties extends Ipv4AddressProperties {}
@@ -35,7 +34,7 @@ export class Ipv4Address implements Ipv4Address.Properties {
 
 		const ipv4Parts = string.split(":");
 
-		if (!ipv4Parts || !ipv4Parts[0] || !ipv4Parts[1]) throw new DiceError("Invalid address string");
+		if (!ipv4Parts[0] || !ipv4Parts[1]) throw new DiceError("Invalid address string");
 
 		return new Ipv4Address({
 			ip: Uint8Array.from(ipaddr.parse(ipv4Parts[0]).toByteArray()),
@@ -43,7 +42,13 @@ export class Ipv4Address implements Ipv4Address.Properties {
 		});
 	}
 
-	static mock = mockAddress;
+	static mock(properties?: Partial<Ipv4Address.Properties>) {
+		return new Ipv4Address({
+			ip: Uint8Array.from([0, 0, 0, 0]),
+			port: 6173,
+			...properties,
+		});
+	}
 
 	readonly type = AddressType.IPv4;
 	readonly ip: Uint8Array;
@@ -58,11 +63,11 @@ export class Ipv4Address implements Ipv4Address.Properties {
 	}
 
 	get buffer(): Uint8Array {
-		return this.cache.buffer || (this.cache.buffer = Ipv4AddressCodec.encode(this));
+		return this.cache.buffer ?? (this.cache.buffer = Ipv4AddressCodec.encode(this));
 	}
 
 	get byteLength(): number {
-		return this.cache.byteLength || (this.cache.byteLength = Ipv4AddressCodec.byteLength(this));
+		return this.cache.byteLength ?? (this.cache.byteLength = Ipv4AddressCodec.byteLength(this));
 	}
 
 	get isPrivate(): boolean {
@@ -75,11 +80,11 @@ export class Ipv4Address implements Ipv4Address.Properties {
 	}
 
 	get key(): string {
-		return this.cache.key || (this.cache.key = hex.encode(this.buffer));
+		return this.cache.key ?? (this.cache.key = hex.encode(this.buffer));
 	}
 
 	get prefix(): string {
-		return this.cache.prefix || (this.cache.prefix = hex.encode(this.ip.subarray(0, 3)));
+		return this.cache.prefix ?? (this.cache.prefix = hex.encode(this.ip.subarray(0, 3)));
 	}
 
 	get properties(): Ipv4Address.Properties {
@@ -98,6 +103,6 @@ export class Ipv4Address implements Ipv4Address.Properties {
 	}
 
 	toString() {
-		return this.cache.string || (this.cache.string = `${ipaddr.fromByteArray([...this.ip]).toString()}:${this.port}`);
+		return this.cache.string ?? (this.cache.string = `${ipaddr.fromByteArray([...this.ip]).toString()}:${this.port}`);
 	}
 }

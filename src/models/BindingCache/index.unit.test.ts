@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BindingCache } from ".";
-import { Adapter } from "../Adapter";
-import { Ipv4Address } from "../Ipv4Address";
 import { Envelope } from "../Envelope";
+import { Ipv4Address } from "../Ipv4Address";
+import { UdpTransport } from "../UdpTransport";
 
 describe("BindingCache", () => {
 	let mockSocket: any;
-	let adapter: Adapter;
+	let udpTransport: UdpTransport;
 	let bindings: BindingCache;
 
 	beforeEach(() => {
@@ -19,12 +19,12 @@ describe("BindingCache", () => {
 			unref: vi.fn(),
 		};
 
-		adapter = new Adapter({ socket: mockSocket });
-		bindings = new BindingCache({ adapter });
+		udpTransport = new UdpTransport({ socket: mockSocket });
+		bindings = new BindingCache({ udpTransport });
 	});
 
 	afterEach(() => {
-		adapter.close();
+		udpTransport.close();
 	});
 
 	describe("inbound binding operations", () => {
@@ -112,7 +112,7 @@ describe("BindingCache", () => {
 		});
 	});
 
-	describe("auto-establishment from adapter events", () => {
+	describe("auto-establishment from udpTransport events", () => {
 		it("establishes inbound binding on envelope event", () => {
 			const remoteAddress = new Ipv4Address({ ip: new Uint8Array([192, 168, 1, 1]), port: 8080 });
 			const envelope = new Envelope({ payload: new Uint8Array([1, 2, 3]) });
@@ -120,13 +120,13 @@ describe("BindingCache", () => {
 
 			bindings.external = external;
 
-			const context: Adapter.Context = {
+			const context: UdpTransport.Context = {
 				buffer: envelope.buffer,
 				remoteInfo: { address: "192.168.1.1", family: "IPv4" as const, port: 8080, size: envelope.byteLength },
 				remoteAddress,
 			};
 
-			adapter.events.emit("envelope", envelope, context);
+			udpTransport.events.emit("envelope", envelope, context);
 
 			expect(bindings.hasInboundBinding(remoteAddress.key, external.key)).toBe(true);
 		});
@@ -138,7 +138,7 @@ describe("BindingCache", () => {
 
 			bindings.external = external;
 
-			adapter.events.emit("send", buffer, targetAddress);
+			udpTransport.events.emit("send", buffer, targetAddress);
 
 			expect(bindings.hasOutboundBinding(external.key, targetAddress.key)).toBe(true);
 		});

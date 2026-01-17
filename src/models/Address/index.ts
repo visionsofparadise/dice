@@ -1,9 +1,9 @@
-import { Codec } from "bufferfy";
-import { AddressInfo } from "net";
+import type { Codec } from "bufferfy";
+import type { AddressInfo } from "net";
 import { DiceError } from "../Error";
 import { Ipv4Address } from "../Ipv4Address";
 import { Ipv6Address } from "../Ipv6Address";
-import { AddressCodec } from "./Codec";
+import type { AddressCodec } from "./Codec";
 
 export type Address = Codec.Type<typeof AddressCodec>;
 

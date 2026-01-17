@@ -36,7 +36,7 @@
 		"types": ["vitest/globals"]
 	},
 	"include": ["src/**/*.ts", "src/**/*.tsx"],
-	"exclude": ["dist/", "node_modules"],
+	"exclude": ["dist/", "node_modules", "**/*.test.ts", "**/*.test.tsx"],
 	"ts-node": {
 		"esm": true,
 		"compilerOptions": {

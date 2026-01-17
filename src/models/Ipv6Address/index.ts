@@ -1,11 +1,10 @@
 import { hex } from "@scure/base";
-import { RemoteInfo } from "dgram";
+import type { RemoteInfo } from "dgram";
 import ipaddr from "ipaddr.js";
-import { AddressInfo } from "net";
+import type { AddressInfo } from "net";
 import { AddressType } from "../Address/Type";
 import { DiceError } from "../Error";
-import { Ipv6AddressCodec, Ipv6AddressProperties } from "./Codec";
-import { mockAddress } from "./methods/mock";
+import { Ipv6AddressCodec, type Ipv6AddressProperties } from "./Codec";
 
 export namespace Ipv6Address {
 	export interface Properties extends Ipv6AddressProperties {}
@@ -33,17 +32,28 @@ export class Ipv6Address implements Ipv6Address.Properties {
 	static fromString(string: string): Ipv6Address {
 		if (!string || string === "") throw new DiceError("Invalid address string");
 
-		const ipv6Parts = string.split(":");
+		// Use regex to properly parse bracketed IPv6 format: [2001:db8::1]:8080
+		const IPV6_ADDRESS_REGEX = /^\[(?<ipv6>[^\]]+)\]:(?<port>\d+)$/;
+		const match = IPV6_ADDRESS_REGEX.exec(string);
 
-		if (!ipv6Parts || !ipv6Parts[0] || !ipv6Parts[1]) throw new DiceError("Invalid address string");
+		const ipv6 = match?.groups?.ipv6;
+		const port = match?.groups?.port;
+
+		if (!ipv6 || !port) throw new DiceError("Invalid address string");
 
 		return new Ipv6Address({
-			ip: Uint8Array.from(ipaddr.parse(ipv6Parts[0]).toByteArray()),
-			port: parseInt(ipv6Parts[1]),
+			ip: Uint8Array.from(ipaddr.parse(ipv6).toByteArray()),
+			port: parseInt(port),
 		});
 	}
 
-	static mock = mockAddress;
+	static mock(properties?: Partial<Ipv6Address.Properties>) {
+		return new Ipv6Address({
+			ip: Uint8Array.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+			port: 6173,
+			...properties,
+		});
+	}
 
 	readonly type = AddressType.IPv6;
 	readonly ip: Uint8Array;
@@ -58,11 +68,11 @@ export class Ipv6Address implements Ipv6Address.Properties {
 	}
 
 	get buffer(): Uint8Array {
-		return this.cache.buffer || (this.cache.buffer = Ipv6AddressCodec.encode(this));
+		return this.cache.buffer ?? (this.cache.buffer = Ipv6AddressCodec.encode(this));
 	}
 
 	get byteLength(): number {
-		return this.cache.byteLength || (this.cache.byteLength = Ipv6AddressCodec.byteLength(this));
+		return this.cache.byteLength ?? (this.cache.byteLength = Ipv6AddressCodec.byteLength(this));
 	}
 
 	get isPrivate(): boolean {
@@ -72,11 +82,11 @@ export class Ipv6Address implements Ipv6Address.Properties {
 	}
 
 	get key(): string {
-		return this.cache.key || (this.cache.key = hex.encode(this.buffer));
+		return this.cache.key ?? (this.cache.key = hex.encode(this.buffer));
 	}
 
 	get prefix(): string {
-		return this.cache.prefix || (this.cache.prefix = hex.encode(this.ip.subarray(0, 8)));
+		return this.cache.prefix ?? (this.cache.prefix = hex.encode(this.ip.subarray(0, 8)));
 	}
 
 	get properties(): Ipv6Address.Properties {
@@ -95,6 +105,6 @@ export class Ipv6Address implements Ipv6Address.Properties {
 	}
 
 	toString() {
-		return this.cache.string || (this.cache.string = `[${ipaddr.fromByteArray([...this.ip]).toString()}]:${this.port}`);
+		return this.cache.string ?? (this.cache.string = `[${ipaddr.fromByteArray([...this.ip]).toString()}]:${this.port}`);
 	}
 }

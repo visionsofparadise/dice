@@ -1,6 +1,7 @@
 import EventEmitter from "events";
-import { Address } from "../Address";
-import { EventEmitterOptions } from "../EventEmitter";
+import type { Address } from "../Address";
+import type { AddressType } from "../Address/Type";
+import type { EventEmitterOptions } from "../EventEmitter";
 
 export namespace Coordinators {
 	export interface EventMap {
@@ -11,8 +12,13 @@ export namespace Coordinators {
 	}
 
 	export interface Options extends EventEmitterOptions {
-		coordinatorCount: number;
+		coordinatorCount?: number;
 		excluded?: Set<string>;
+		expectedType?: AddressType;
+	}
+
+	export interface ResolvedOptions extends Options {
+		coordinatorCount: number;
 	}
 }
 
@@ -38,7 +44,7 @@ export class Coordinators {
 	private map = new Map<string, Address>();
 
 	public events: EventEmitter<Coordinators.EventMap>;
-	public options: Coordinators.Options;
+	public options: Coordinators.ResolvedOptions;
 
 	constructor(options?: Coordinators.Options) {
 		this.options = {
@@ -82,12 +88,14 @@ export class Coordinators {
 		return this.map.has(key);
 	}
 
-	isValidAddress(address: Address): boolean {
+	isValidAddress(address: Address, expectedType?: AddressType): boolean {
+		const typeToCheck = expectedType ?? this.options.expectedType;
 		const isExcluded = this.options.excluded?.has(address.key);
 		const isAlreadyCoordinator = this.has(address.key);
 		const hasSpace = this.size < this.options.coordinatorCount;
+		const isCorrectType = !typeToCheck || address.type === typeToCheck;
 
-		return !isExcluded && !isAlreadyCoordinator && hasSpace;
+		return !isExcluded && !isAlreadyCoordinator && hasSpace && isCorrectType;
 	}
 
 	/**
@@ -95,7 +103,7 @@ export class Coordinators {
 	 *
 	 * @returns Array of coordinator addresses
 	 */
-	list(): Address[] {
+	list(): Array<Address> {
 		return [...this.map.values()];
 	}
 

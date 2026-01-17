@@ -1,9 +1,9 @@
 import { hex } from "@scure/base";
-import { RequiredProperties } from "../../utilities/RequiredProperties";
-import { Adapter } from "../Adapter";
+import type { RequiredProperties } from "../../utilities/RequiredProperties";
 import { DiceError } from "../Error";
-import { Message } from "../Message";
-import { MessageBodyType } from "../Message/BodyCodec";
+import type { Message } from "../Message";
+import type { MessageBodyType } from "../Message/BodyCodec";
+import { UdpTransport } from "../UdpTransport";
 
 export interface AwaitResponseOptions {
 	sendAbortController?: AbortController;
@@ -23,10 +23,10 @@ export interface ResponseAssertions<T extends MessageBodyType> {
 	};
 }
 
-export namespace ResponseCorrelator {
+export namespace PendingRequests {
 	export interface Options {
-		adapter: Adapter;
 		timeoutMs: number;
+		udpTransport: UdpTransport;
 	}
 
 	export type State = 0 | 1;
@@ -40,17 +40,17 @@ export namespace ResponseCorrelator {
  *
  * @example
  * ```typescript
- * const correlator = new ResponseCorrelator();
+ * const pendingRequests = new PendingRequests();
  *
  * // Send request and await response
- * const promise = correlator.awaitResponse(assertions, options);
+ * const promise = pendingRequests.awaitResponse(assertions, options);
  * // ... send message ...
  *
  * // When response arrives
- * correlator.handleIncomingResponse(message, context);
+ * pendingRequests.handleIncomingResponse(message, context);
  * ```
  */
-export class ResponseCorrelator {
+export class PendingRequests {
 	static STATE = {
 		CLOSED: 0,
 		OPENED: 1,
@@ -58,21 +58,21 @@ export class ResponseCorrelator {
 
 	static readonly DEFAULT_TIMEOUT_MS = 3_000;
 
-	public adapter: Adapter;
-	public options: ResponseCorrelator.Options;
+	public options: PendingRequests.Options;
 	public listeners = new Map<string, { abort: AbortController; listener: (message: Message) => void; timeout: NodeJS.Timeout }>();
-	public state: Adapter.State = Adapter.STATE.CLOSED;
+	public state: UdpTransport.State = UdpTransport.STATE.CLOSED;
+	public udpTransport: UdpTransport;
 
-	constructor(options: RequiredProperties<ResponseCorrelator.Options, "adapter">) {
+	constructor(options: RequiredProperties<PendingRequests.Options, "udpTransport">) {
 		this.options = {
-			timeoutMs: ResponseCorrelator.DEFAULT_TIMEOUT_MS,
+			timeoutMs: PendingRequests.DEFAULT_TIMEOUT_MS,
 			...options,
 		};
 
-		this.adapter = options.adapter;
+		this.udpTransport = options.udpTransport;
 
-		this.adapter.events.on("diceMessage", this.adapterListeners.diceMessageListener);
-		this.state = Adapter.STATE.OPENED;
+		this.udpTransport.events.on("diceMessage", this.udpTransportListeners.diceMessageListener);
+		this.state = UdpTransport.STATE.OPENED;
 	}
 
 	/**
@@ -85,42 +85,39 @@ export class ResponseCorrelator {
 	 */
 	async awaitResponse<T extends MessageBodyType = MessageBodyType>(assertions: ResponseAssertions<T>, options?: AwaitResponseOptions): Promise<Message<T>> {
 		return new Promise<Message<T>>((resolve, reject) => {
-			if (options?.signal?.aborted) return reject(new DiceError("Awaiting response aborted"));
+			if (options?.signal?.aborted) {
+				reject(new DiceError("Awaiting response aborted"));
+				return;
+			}
 
 			const internalAbort = new AbortController();
 			const key = `${assertions.source.address.key}:${assertions.body.type}:${hex.encode(assertions.body.transactionId)}`;
 
-			let abortListener: (() => void) | undefined;
-			let responseListener: ((message: Message) => void) | undefined;
-			let timeout: NodeJS.Timeout | undefined;
-
-			const clearListeners = () => {
-				if (options?.sendAbortController) options.sendAbortController.abort();
-				if (abortListener) {
-					options?.signal?.removeEventListener("abort", abortListener);
-					internalAbort.signal.removeEventListener("abort", abortListener);
-				}
-				if (responseListener) this.listeners.delete(key);
-				if (timeout) clearTimeout(timeout);
+			const abortListener = () => {
+				cleanup();
+				reject(new DiceError("Awaiting response aborted"));
 			};
 
-			abortListener = () => {
-				clearListeners();
-				reject(new DiceError("Awaiting response aborted"));
+			const responseListener = (response: Message) => {
+				cleanup();
+				resolve(response as Message<T>);
+			};
+
+			const timeout = setTimeout(() => {
+				cleanup();
+				reject(new DiceError("Awaiting response timed out"));
+			}, options?.timeoutMs ?? this.options.timeoutMs);
+
+			const cleanup = () => {
+				if (options?.sendAbortController) options.sendAbortController.abort();
+				options?.signal?.removeEventListener("abort", abortListener);
+				internalAbort.signal.removeEventListener("abort", abortListener);
+				this.listeners.delete(key);
+				clearTimeout(timeout);
 			};
 
 			options?.signal?.addEventListener("abort", abortListener);
 			internalAbort.signal.addEventListener("abort", abortListener);
-
-			responseListener = (response: Message) => {
-				clearListeners();
-				resolve(response as Message<T>);
-			};
-
-			timeout = setTimeout(() => {
-				clearListeners();
-				reject(new DiceError("Awaiting response timed out"));
-			}, options?.timeoutMs || this.options.timeoutMs);
 
 			this.listeners.set(key, {
 				abort: internalAbort,
@@ -133,7 +130,7 @@ export class ResponseCorrelator {
 	/**
 	 * Aborts all pending requests.
 	 *
-	 * Used during layer close to clean up pending requests.
+	 * Used during ipChannel close to clean up pending requests.
 	 */
 	abortAll(): void {
 		for (const { abort, timeout } of this.listeners.values()) {
@@ -158,13 +155,13 @@ export class ResponseCorrelator {
 	}
 
 	/**
-	 * Closes the correlator and removes adapter listener.
+	 * Closes the correlator and removes udpTransport listener.
 	 */
 	close(): void {
-		if (this.state === Adapter.STATE.CLOSED) return;
+		if (this.state === UdpTransport.STATE.CLOSED) return;
 
-		this.adapter.events.removeListener("diceMessage", this.adapterListeners.diceMessageListener);
-		this.state = Adapter.STATE.CLOSED;
+		this.udpTransport.events.removeListener("diceMessage", this.udpTransportListeners.diceMessageListener);
+		this.state = UdpTransport.STATE.CLOSED;
 	}
 
 	/**
@@ -176,8 +173,8 @@ export class ResponseCorrelator {
 		return this.listeners.size;
 	}
 
-	adapterListeners = {
-		diceMessageListener: (message: Message, context: Adapter.PayloadContext) => {
+	udpTransportListeners = {
+		diceMessageListener: (message: Message, context: UdpTransport.PayloadContext) => {
 			if (!("transactionId" in message.body)) return;
 
 			const key = `${context.remoteAddress.key}:${message.body.type}:${hex.encode(message.body.transactionId)}`;

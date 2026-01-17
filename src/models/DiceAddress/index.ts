@@ -2,8 +2,7 @@ import { AddressType } from "../Address/Type";
 import { DiceError } from "../Error";
 import { Ipv4Address } from "../Ipv4Address";
 import { Ipv6Address } from "../Ipv6Address";
-import { DiceAddressCodec, DiceAddressProperties } from "./Codec";
-import { mockEndpoint } from "./methods/mock";
+import { DiceAddressCodec, type DiceAddressProperties } from "./Codec";
 
 export namespace DiceAddress {
 	export interface Properties extends DiceAddressProperties {}
@@ -19,7 +18,7 @@ export class DiceAddress implements DiceAddress.Properties {
 
 	static fromString(string: string) {
 		// Validate protocol prefix
-		if (!string || !string.startsWith(this.PROTOCOL)) {
+		if (!string.startsWith(this.PROTOCOL)) {
 			throw new DiceError(`Invalid DICE address: must start with "${this.PROTOCOL}"`);
 		}
 
@@ -41,14 +40,14 @@ export class DiceAddress implements DiceAddress.Properties {
 			try {
 				ipv6 = Ipv6Address.fromString(ipv6String);
 			} catch (error) {
-				throw new DiceError(`Invalid IPv6 address "${ipv6String}": ${error instanceof Error ? error.message : error}`);
+				throw new DiceError(`Invalid IPv6 address "${ipv6String}": ${error instanceof Error ? error.message : String(error)}`);
 			}
 
 			if (ipv6RelayAddressStrings) {
 				try {
 					ipv6RelayAddresses = ipv6RelayAddressStrings.split(",").map((addrString) => Ipv6Address.fromString(addrString));
 				} catch (error) {
-					throw new DiceError(`Invalid IPv6 coordinator address in "${ipv6RelayAddressStrings}": ${error instanceof Error ? error.message : error}`);
+					throw new DiceError(`Invalid IPv6 coordinator address in "${ipv6RelayAddressStrings}": ${error instanceof Error ? error.message : String(error)}`);
 				}
 			}
 		}
@@ -61,14 +60,14 @@ export class DiceAddress implements DiceAddress.Properties {
 			try {
 				ipv4 = Ipv4Address.fromString(ipv4String);
 			} catch (error) {
-				throw new DiceError(`Invalid IPv4 address "${ipv4String}": ${error instanceof Error ? error.message : error}`);
+				throw new DiceError(`Invalid IPv4 address "${ipv4String}": ${error instanceof Error ? error.message : String(error)}`);
 			}
 
 			if (ipv4RelayAddressStrings) {
 				try {
 					ipv4RelayAddresses = ipv4RelayAddressStrings.split(",").map((addrString) => Ipv4Address.fromString(addrString));
 				} catch (error) {
-					throw new DiceError(`Invalid IPv4 coordinator address in "${ipv4RelayAddressStrings}": ${error instanceof Error ? error.message : error}`);
+					throw new DiceError(`Invalid IPv4 coordinator address in "${ipv4RelayAddressStrings}": ${error instanceof Error ? error.message : String(error)}`);
 				}
 			}
 		}
@@ -94,7 +93,14 @@ export class DiceAddress implements DiceAddress.Properties {
 		});
 	}
 
-	static mock = mockEndpoint;
+	static mock(properties?: Partial<DiceAddress.Properties>) {
+		return new DiceAddress({
+			[AddressType.IPv6]: {
+				address: Ipv6Address.mock(),
+			},
+			...properties,
+		});
+	}
 
 	[AddressType.IPv6]?: {
 		address: Ipv6Address;
@@ -114,11 +120,11 @@ export class DiceAddress implements DiceAddress.Properties {
 	}
 
 	get buffer(): Uint8Array {
-		return this.cache.buffer || (this.cache.buffer = DiceAddressCodec.encode(this));
+		return this.cache.buffer ?? (this.cache.buffer = DiceAddressCodec.encode(this));
 	}
 
 	get byteLength(): number {
-		return this.cache.byteLength || (this.cache.byteLength = DiceAddressCodec.byteLength(this));
+		return this.cache.byteLength ?? (this.cache.byteLength = DiceAddressCodec.byteLength(this));
 	}
 
 	get properties(): DiceAddress.Properties {
@@ -128,6 +134,10 @@ export class DiceAddress implements DiceAddress.Properties {
 	}
 
 	toString(): string {
-		return `${DiceAddress.PROTOCOL}${this[AddressType.IPv6]?.address || ""}/${this[AddressType.IPv6]?.coordinators?.join(",") || ""}/${this[AddressType.IPv4]?.address || ""}/${this[AddressType.IPv4]?.coordinators?.join(",") || ""}`;
+		const ipv6Address = this[AddressType.IPv6]?.address.toString() ?? "";
+		const ipv6Coordinators = this[AddressType.IPv6]?.coordinators?.map((coordinator) => coordinator.toString()).join(",") ?? "";
+		const ipv4Address = this[AddressType.IPv4]?.address.toString() ?? "";
+		const ipv4Coordinators = this[AddressType.IPv4]?.coordinators?.map((coordinator) => coordinator.toString()).join(",") ?? "";
+		return `${DiceAddress.PROTOCOL}${ipv6Address}/${ipv6Coordinators}/${ipv4Address}/${ipv4Coordinators}`;
 	}
 }
