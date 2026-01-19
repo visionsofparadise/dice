@@ -75,16 +75,16 @@ export class NetworkBuilder {
 					logger,
 				});
 
-				const ipChannel = client.ipChannels[AddressType.IPv4]!;
+				const ipChannel = client.ipChannels[AddressType.IPv4];
 
-				if (config.natType === "none") {
+				if (ipChannel && config.natType === "none") {
 					ipChannel.addressTracker.external = externalAddress;
 					ipChannel.bindings.external = externalAddress;
 					ipChannel.addressTracker.lastUnsolicitedAt = Date.now();
 				}
 
 				client.open();
-				clearInterval(ipChannel.healthcheckInterval);
+				clearInterval(ipChannel?.healthcheckInterval);
 
 				peers.set(config.name, {
 					name: config.name,
