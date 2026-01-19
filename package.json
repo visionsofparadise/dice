@@ -1,6 +1,6 @@
 {
 	"name": "@xkore/dice",
-	"version": "1.0.9",
+	"version": "1.0.10",
 	"description": "Thin NAT traversal transport layer for application overlay networks - infrastructure-free UDP hole punching",
 	"main": "./dist/index.js",
 	"module": "./dist/index.mjs",
