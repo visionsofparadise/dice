@@ -17,6 +17,7 @@ dry.json
 .DS_Store
 *.pem
 .cache
+.eslintcache
 
 # debug
 npm-debug.log*

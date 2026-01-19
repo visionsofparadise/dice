@@ -74,7 +74,9 @@ export class Coordinators {
 	tryAdd(address: Address): boolean {
 		if (this.map.has(address.key)) return false;
 		if (this.map.size >= this.options.coordinatorCount) return false;
+
 		this.map.set(address.key, address);
+
 		return true;
 	}
 

@@ -16,6 +16,7 @@ export namespace AddressTracker {
 	export interface Options {
 		bindings: BindingCache;
 		isAddressValidationDisabled?: boolean;
+		isPrefixFilteringDisabled?: boolean;
 		logger?: Logger;
 		reachableWindowMs: number;
 		udpTransport: UdpTransport;
@@ -124,28 +125,29 @@ export class AddressTracker {
 		const prefix = remoteAddress.prefix;
 		const previousExternal = this.external?.key;
 
-		const hasSamePrefix = this.reflections.some((reflection) => reflection.prefix === prefix);
-
-		if (hasSamePrefix) return;
+		if (!this.options.isPrefixFilteringDisabled) {
+			const hasSamePrefix = this.reflections.some((reflection) => reflection.prefix === prefix);
+			if (hasSamePrefix) return;
+		}
 
 		this.reflections.push({ prefix, address: reflectionAddress });
 		if (this.reflections.length > 2) {
 			this.reflections.shift();
 		}
 
-		let newExternal: Address | undefined;
-
 		if (this.reflections[0] && this.reflections[1]) {
+			let newExternal: Address | undefined;
+
 			if (this.reflections[0].address.key === this.reflections[1].address.key) {
 				newExternal = this.reflections[0].address;
 			}
-		}
 
-		if (newExternal?.key !== previousExternal) {
-			this.external = newExternal;
-			this.options.bindings.external = newExternal;
+			if (newExternal?.key !== previousExternal) {
+				this.external = newExternal;
+				this.options.bindings.external = newExternal;
 
-			this.events.emit("address", this.external, this.isReachable);
+				this.events.emit("address", this.external, this.isReachable);
+			}
 		}
 	};
 

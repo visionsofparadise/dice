@@ -7,7 +7,6 @@ import { AddressTracker } from "../AddressTracker";
 import { BindingCache } from "../BindingCache";
 import { Coordinators } from "../Coordinators";
 import type { DiceAddress } from "../DiceAddress";
-import type { Envelope } from "../Envelope";
 import { DiceError } from "../Error";
 import type { EventEmitterOptions } from "../EventEmitter";
 import type { Message } from "../Message";
@@ -127,7 +126,6 @@ export class IpChannel {
 			pendingRequests: this.pendingRequests,
 		});
 
-		this.udpTransport.events.on("envelope", this.udpTransportListeners.envelopeListener);
 		this.udpTransport.events.on("diceMessage", this.udpTransportListeners.diceMessageListener);
 
 		this.addressTracker.events.on("address", this.addressTrackerListeners.addressListener);
@@ -164,7 +162,6 @@ export class IpChannel {
 
 		clearInterval(this.healthcheckInterval);
 
-		this.udpTransport.events.removeListener("envelope", this.udpTransportListeners.envelopeListener);
 		this.udpTransport.events.removeListener("diceMessage", this.udpTransportListeners.diceMessageListener);
 
 		this.addressTracker.events.removeListener("address", this.addressTrackerListeners.addressListener);
@@ -180,41 +177,34 @@ export class IpChannel {
 	}
 
 	/**
-	 * Handles several critical functions:
-	 * - Updates reachability status when receiving unsolicited messages
-	 * - Manages NAT binding cache for successful connections
-	 * - Discovers and adds coordinators based on connectivity
+	 * Considers an address for addition to the coordinator pool.
+	 * Pings the address to verify reachability, then adds if responsive.
 	 *
-	 * @param address - Source address of the incoming message
+	 * @param address - Address to consider as potential coordinator
 	 */
 	async handleAddress(address: Address): Promise<void> {
 		if (this.state !== IpChannel.STATE.OPENED) {
 			throw new DiceError("Cannot handle address: ipChannel is not opened");
 		}
 
-		// Not ready for coordinator discovery yet
 		if (!this.addressTracker.external) {
 			return;
 		}
 
-		// Direct coordinator testing: add peers from application traffic
-		// If we received from a peer without existing binding, pool not full, and peer is valid
-		const noExistingBinding = !this.bindings.hasOutboundBinding(this.addressTracker.external.key, address.key);
+		if (!this.addressTracker.isRemoteAddress(address) || !this.coordinators.isValidAddress(address, this.udpTransport.local.type)) {
+			return;
+		}
 
-		if (this.addressTracker.isRemoteAddress(address) && this.coordinators.isValidAddress(address, this.udpTransport.local.type) && noExistingBinding) {
-			try {
-				await this.protocol.ping(address);
+		try {
+			await this.protocol.ping(address);
 
-				const added = this.coordinators.tryAdd(address);
+			const added = this.coordinators.tryAdd(address);
 
-				if (added) {
-					this.events.emit("address", this.addressTracker.external, !this.addressTracker.isReachable ? this.coordinators.list() : undefined);
-				}
-			} catch (error) {
-				this.logger?.debug(`Failed to ping potential coordinator ${address.toString()}:`, error);
-
-				return;
+			if (added) {
+				this.events.emit("address", this.addressTracker.external, !this.addressTracker.isReachable ? this.coordinators.list() : undefined);
 			}
+		} catch (error) {
+			this.logger?.debug(`Failed to ping potential coordinator ${address.toString()}:`, error);
 		}
 	}
 
@@ -277,11 +267,6 @@ export class IpChannel {
 	};
 
 	udpTransportListeners = {
-		envelopeListener: (_envelope: Envelope, context: UdpTransport.Context) => {
-			this.handleAddress(context.remoteAddress).catch((error: unknown) => {
-				this.events.emit("error", error);
-			});
-		},
 		diceMessageListener: (message: Message, context: UdpTransport.PayloadContext) => {
 			this.protocol.handleMessage(message, context).catch((error: unknown) => {
 				this.events.emit("error", error);

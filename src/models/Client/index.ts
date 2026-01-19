@@ -295,6 +295,29 @@ export class Client {
 	}
 
 	/**
+	 * Considers a DiceAddress for coordinator discovery.
+	 *
+	 * For each endpoint that claims to be publicly reachable (coordinators === undefined),
+	 * pings the address and adds to the coordinator pool if responsive.
+	 *
+	 * @param diceAddress - DiceAddress to evaluate for coordinator candidates
+	 */
+	async handleDiceAddress(diceAddress: DiceAddress): Promise<void> {
+		if (this.state !== Client.STATE.OPENED) {
+			throw new DiceError("Cannot handle DiceAddress: client is not opened");
+		}
+
+		for (const type of [AddressType.IPv6, AddressType.IPv4] as const) {
+			const endpoint = diceAddress[type];
+			const ipChannel = this.ipChannels[type];
+
+			if (endpoint?.address && endpoint.coordinators === undefined && ipChannel) {
+				await ipChannel.handleAddress(endpoint.address);
+			}
+		}
+	}
+
+	/**
 	 * Sends a message to another peer via their DICE address.
 	 *
 	 * This is the primary method for peer-to-peer communication. It handles:
@@ -350,17 +373,19 @@ export class Client {
 			);
 		}
 
+		await this.handleDiceAddress(diceAddress);
+
 		for (const type of addressType ? [addressType] : [AddressType.IPv6, AddressType.IPv4]) {
 			const endpoint = diceAddress[type];
-			const layer = this.ipChannels[type];
+			const ipChannel = this.ipChannels[type];
 
-			if (!endpoint?.address || !layer) continue;
+			if (!endpoint?.address || !ipChannel) continue;
 
 			if (endpoint.coordinators?.length) {
-				await layer.protocol.requestBind(endpoint.address, endpoint.coordinators);
+				await ipChannel.protocol.requestBind(endpoint.address, endpoint.coordinators);
 			}
 
-			await layer.udpTransport.send(buffer, endpoint.address, options);
+			await ipChannel.udpTransport.send(buffer, endpoint.address, options);
 
 			return;
 		}
